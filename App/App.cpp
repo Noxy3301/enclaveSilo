@@ -54,7 +54,10 @@ using namespace std;
 #include "../Include/util.h"
 #include "../Include/logger.h"
 
-#include "notifier.h"
+#include "include/notifier.h"
+#include "include/result.h"
+#include "include/random.h"
+#include "include/zipf.h"
 
 /* Global EID shared by multiple threads */
 sgx_enclave_id_t global_eid = 0;
@@ -131,14 +134,43 @@ void ocall_print_string(const char *str) {
 
 
 void worker_th(int thid, char &ready, const bool &start, const bool &quit, std::atomic<Logger*> *logp) {
-    std::cout << "HI, IM WORKER" << thid << std::endl;
+    ResultLog &myres_log = std::ref(SiloResult[thid]);
+    Result &myres = std::ref(myres_log.result_);
+    Xoroshiro128Plus rnd;
+    rnd.init();
+    FastZipf zipf(&rnd, ZIPF_SKEW, TUPLE_NUM);
+
+    __atomic_store_n(&ready, 1, __ATOMIC_RELEASE);
+    while (true) {
+        if (__atomic_load_n(&start, __ATOMIC_ACQUIRE)) break;
+    }
+
+    if (thid == 0) // epoch_timer_start = rdtscp();
+
+    while (true) {
+        if (__atomic_load_n(&quit, __ATOMIC_ACQUIRE)) break;
+        // [enclave] make Procedure
+        // [enclave] execute Transaction
+        int ret = -1;
+        ecall_execTransaction(global_eid, &ret, rnd.next(), rnd.next(), zipf(), thid);
+
+    }
 }
 
 void logger_th(int thid, Notifier &notifier, std::atomic<Logger*> *logp) {
-    std::cout << "HI, IM LOGGER" << thid << std::endl;
 }
 
-
+void waitForReady(const std::vector<char> &readys) {
+    while (true) {
+        bool failed = false;
+        for (const auto &ready : readys) {
+            if (!__atomic_load_n(&ready, __ATOMIC_ACQUIRE)) {
+                failed = true;
+            }
+        }
+        if (!failed) break;
+    }
+}
 
 /* Application entry */
 int SGX_CDECL main() {
@@ -195,15 +227,23 @@ int SGX_CDECL main() {
         }
     }
 
+    waitForReady(readys);
+    __atomic_store_n(&start, true, __ATOMIC_RELEASE);
+    std::this_thread::sleep_for(std::chrono::milliseconds(1000 * EXTIME));
+    __atomic_store_n(&quit, true, __ATOMIC_RELEASE);
 
+    for (auto &th : lthv) th.join();
+    for (auto &th : wthv) th.join();
 
+    p4 = chrono::system_clock::now();
 
     double duration1 = static_cast<double>(chrono::duration_cast<chrono::microseconds>(p2 - p1).count() / 1000.0);
     double duration2 = static_cast<double>(chrono::duration_cast<chrono::microseconds>(p3 - p2).count() / 1000.0);
-    // double duration3 = static_cast<double>(chrono::duration_cast<chrono::microseconds>(p4 - p3).count() / 1000.0);
+    double duration3 = static_cast<double>(chrono::duration_cast<chrono::microseconds>(p4 - p3).count() / 1000.0);
 
     std::cout << "[info]\tcreateEnclave:\t" << duration1/1000 << "s.\n";
     std::cout << "[info]\tmakeDB:\t\t" << duration2/1000 << "s.\n";
+    std::cout << "[info]\texecutionTime:\t" << duration3/1000 << "s.\n";
 
     /* Destroy the enclave */
     sgx_destroy_enclave(global_eid);

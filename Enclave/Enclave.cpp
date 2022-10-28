@@ -71,3 +71,7 @@ void ecall_makeDB() {
         tmp->val_[1] = '\0';
     }
 }
+
+// int ecall_execTransaction(uint64_t rnd1, uint64_t rnd2, uint64_t zipf, int thid) {
+//     TxExe
+// }
