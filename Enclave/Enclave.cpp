@@ -60,12 +60,6 @@ int printf(const char* fmt, ...)
     return (int)strnlen(buf, BUFSIZ - 1) + 1;
 }
 
-void ecall_init() {
-    
-}
-
-
-
 void ecall_makeDB() {
     for (auto i = 0; i < TUPLE_NUM; i++) {
         Tuple *tmp;

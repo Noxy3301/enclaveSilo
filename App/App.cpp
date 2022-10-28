@@ -46,12 +46,15 @@
 #include <vector>
 #include <thread>
 #include <chrono>
+#include <atomic>
 
 using namespace std;
 
 #include "../Include/consts.h"
 #include "../Include/util.h"
 #include "../Include/logger.h"
+
+#include "notifier.h"
 
 /* Global EID shared by multiple threads */
 sgx_enclave_id_t global_eid = 0;
@@ -127,13 +130,13 @@ void ocall_print_string(const char *str) {
 
 
 
-// void worker_th(int thid, char &ready, const bool &start, const bool &quit, std::atomic<Logger*> *logp) {
-//     // ecall_ready(&thid)
-// }
+void worker_th(int thid, char &ready, const bool &start, const bool &quit, std::atomic<Logger*> *logp) {
+    std::cout << "HI, IM WORKER" << thid << std::endl;
+}
 
-// void logger_th(int thid, Notifier &notifier, std::atomic<Logger*> *logp) {
-
-// }
+void logger_th(int thid, Notifier &notifier, std::atomic<Logger*> *logp) {
+    std::cout << "HI, IM LOGGER" << thid << std::endl;
+}
 
 
 
@@ -155,9 +158,6 @@ int SGX_CDECL main() {
 
     displayParameter();
 
-
-    ecall_init(global_eid);
-
     p2 = chrono::system_clock::now();
 
     ecall_makeDB(global_eid);
@@ -167,26 +167,34 @@ int SGX_CDECL main() {
     LoggerAffinity affin;   // Nodeごとに管理する用のやつ
     affin.init(THREAD_NUM, LOGGER_NUM);
 
+    for (int i = 0; i < LOGGER_NUM; i++) {
+        std::cout << "[info]\tNode#" << i << "\t";
+        std::cout << "worker:";
+        for (int j = 0; j < affin.nodes_[i].worker_cpu_.size(); j++) {
+            std::cout << affin.nodes_[i].worker_cpu_[j] << ((j != affin.nodes_[i].worker_cpu_.size()-1) ? "," : "");
+        }
+        std::cout << "\tlogger:" << affin.nodes_[i].logger_cpu_ << std::endl;
+    }
 
+    bool start = false;
+    bool quit = false;
 
+    std::vector<char> readys(THREAD_NUM);
+    std::atomic<Logger *> logs[LOGGER_NUM];
+    Notifier notifier;
+    std::vector<std::thread> lthv;  // logger threads
+    std::vector<std::thread> wthv;  // worker threads
 
+    int i = 0, j = 0;
+    for (auto itr = affin.nodes_.begin(); itr != affin.nodes_.end(); itr++, j++) {
+        int lcpu = itr->logger_cpu_;
+        logs[j].store(0);
+        lthv.emplace_back(logger_th, j, std::ref(notifier), &(logs[j]));
+        for (auto wcpu = itr->worker_cpu_.begin(); wcpu != itr->worker_cpu_.end(); wcpu++, i++) {
+            wthv.emplace_back(worker_th, i, std::ref(readys[i]), std::ref(start), std::ref(quit), &(logs[j]));  // logsはj番目(loggerと共通のやつ)
+        }
+    }
 
-
-
-
-
-
-
-    // /* Utilize edger8r attributes */
-    // edger8r_array_attributes();
-    // edger8r_pointer_attributes();
-    // edger8r_type_attributes();
-    // edger8r_function_attributes();
-    
-    // /* Utilize trusted libraries */
-    // ecall_libc_functions();
-    // ecall_libcxx_functions();
-    // ecall_thread_functions();
 
 
 

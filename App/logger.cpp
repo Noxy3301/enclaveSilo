@@ -1,6 +1,7 @@
 #include "../Include/logger.h"
 
 #include <iostream>
+#include <thread>
 
 void LoggerAffinity::init(unsigned worker_num, unsigned logger_num) {
     unsigned num_cpus = std::thread::hardware_concurrency();

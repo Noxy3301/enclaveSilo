@@ -60,7 +60,6 @@ enclave {
     };
     
     trusted {
-        public void ecall_init();
         public void ecall_makeDB();
     };
 
