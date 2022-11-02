@@ -228,52 +228,8 @@ void waitForReady(const std::vector<int> &readys) {
     }
 }
 
-Xoroshiro128Plus rnd;
-FastZipf zipf(&rnd, ZIPF_SKEW, TUPLE_NUM);  //関数内で宣言すると割り算処理繰り返すからクソ重いぞ！
-
-// void ocall_makeProcedure(uint64_t pro[MAX_OPE][2]) {
-//     rnd.init();
-//     for (int i = 0; i < MAX_OPE; i++) {
-//         uint64_t tmpkey;
-//         // keyの決定
-//         if (YCSB) {
-//             tmpkey = zipf() % TUPLE_NUM;
-//         } else {
-//             tmpkey = rnd.next() % TUPLE_NUM;
-//         }
-//         pro[i][1] = tmpkey;
-
-//         // Operation typeの決定
-//         if ((rnd.next() % 100) < RRAITO) {
-//             // pro.emplace_back(Ope::READ, tmpkey);
-//             pro[i][0] = 0;
-//         } else {
-//             // pro.emplace_back(Ope::WRITE, tmpkey);
-//             pro[i][0] = 1;
-//         }
-//     }
-// }
-
-uint64_t ocall_chooseOpe() {
-    rnd.init();
-    uint64_t tmpkey;
-    // keyの決定
-    if (YCSB) {
-        tmpkey = zipf() % TUPLE_NUM;
-    } else {
-        tmpkey = rnd.next() % TUPLE_NUM;
-    }
-    return tmpkey;
-}
-
-uint64_t ocall_chooseKey() {
-    rnd.init();
-    if ((rnd.next() % 100) < RRAITO) {
-        return 0;   // Ope::READ
-    } else {
-        return 1;   // Ope::WRITE
-    }
-}
+// Xoroshiro128Plus rnd;
+// FastZipf zipf(&rnd, ZIPF_SKEW, TUPLE_NUM);  //関数内で宣言すると割り算処理繰り返すからクソ重いぞ！
 
 void displayParameter() {
     cout << "#clocks_per_us:\t" << CLOCKS_PER_US << endl;
@@ -295,6 +251,7 @@ void displayResult() {
     uint64_t total_commit_counts_ = 0;
     uint64_t total_abort_counts_ = 0;
 
+    // 各threadのcommit/abort数表示
     for (int i = 0; i < THREAD_NUM; i++) {
         cout << "thread#" << i << "\tcommit: " << SiloResult[i].local_commit_counts_ << "\tabort:" << SiloResult[i].local_abort_counts_ << endl;
         total_commit_counts_ += SiloResult[i].local_commit_counts_;
@@ -303,6 +260,7 @@ void displayResult() {
 
     cout << "commit_counts_:\t" << total_commit_counts_ << endl;
     cout << "abort_counts_:\t" << total_abort_counts_ << endl;
+    cout << "abort_rate:\t" << (double)total_abort_counts_ / (double)(total_commit_counts_ + total_abort_counts_) << endl;
 
     uint64_t result = total_commit_counts_ / EXTIME;
     cout << "latency[ns]:\t" << powl(10.0, 9.0) / result * THREAD_NUM << endl;
@@ -316,7 +274,7 @@ int SGX_CDECL main() {
     chrono::system_clock::time_point p1, p2, p3, p4, p5;
 
     std::cout << "esilo: Silo_logging running within Enclave" << std::endl;
-    std::cout << "transplanted from silo_minimum(commitID:f2f4639)" << std::endl;
+    std::cout << "transplanted from silo_minimum(commitID:2513440)" << std::endl;
     displayParameter();
 
     p1 = chrono::system_clock::now();

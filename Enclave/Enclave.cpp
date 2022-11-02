@@ -35,6 +35,8 @@
 #include <stdio.h> /* vsnprintf */
 #include <string.h>
 
+#include <sgx_trts.h>
+
 
 #include <vector>
 #include <algorithm>
@@ -560,11 +562,17 @@ void ecall_worker_th(int thid) {
         
         // procedure型で～ってやるのがめんどいので、数値だけ生成してもらって内部で解釈しなおす
         uint64_t rcd_pro[MAX_OPE][2];
-        for (int i = 0; i < MAX_OPE; i++) { // ocallでstructを渡す方法を知らないのでMAX_OPE回生成依頼する
-            ocall_chooseOpe(&rcd_pro[i][0]);
-            ocall_chooseKey(&rcd_pro[i][1]);
+        for (int i = 0; i < MAX_OPE; i++) {
+            uint64_t tmpkey, tmpope;
+            sgx_read_rand((unsigned char *) &tmpkey, 8);
+            sgx_read_rand((unsigned char *) &tmpope, 8);
+            rcd_pro[i][1] = tmpkey % TUPLE_NUM; //zipf使えない関係でskew考慮できないのでYCSB:false前提で、やろうと思えばできそう？
+            if ((tmpope % 100) < RRAITO) {
+                rcd_pro[i][0] = 0;
+            } else {
+                rcd_pro[i][0] = 1;
+            }
         }
-        // ocall_makeProcedure(rcd_pro);
         makeProcedure(trans.pro_set_, rcd_pro); // ocallで生成したprocedureをTxExecutorに移し替える
 
     RETRY:
@@ -594,13 +602,6 @@ void ecall_worker_th(int thid) {
             goto RETRY;
         }
     }
-    //cout << "worker#" << thid << " commit:" << myres.local_commit_counts_ << " abort:" << myres.local_abort_counts_ << endl;
-
-    // if (thid == 0) {
-    //     for (int i = 0; i < THREAD_NUM; i++) {
-    //         std::cout << ThLocalEpoch[i] << " ";
-    //     }
-    // }
 
     return;
 }

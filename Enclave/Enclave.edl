@@ -58,8 +58,6 @@ enclave {
      */
     untrusted {
         void ocall_print_string([in, string] const char *str);
-        uint64_t ocall_chooseOpe();
-        uint64_t ocall_chooseKey();
     };
     
     trusted {
