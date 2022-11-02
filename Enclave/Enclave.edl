@@ -34,6 +34,7 @@
 enclave {
     
     include "user_types.h" /* buffer_t */
+    include "stdint.h"
 
     /* Import ECALL/OCALL from sub-directory EDLs.
      *  [from]: specifies the location of EDL file. 
@@ -57,10 +58,17 @@ enclave {
      */
     untrusted {
         void ocall_print_string([in, string] const char *str);
+        uint64_t ocall_chooseOpe();
+        uint64_t ocall_chooseKey();
     };
     
     trusted {
-        public void ecall_makeDB();
+        public void ecall_initDB();
+        public void ecall_worker_th(int thid);
+        public void ecall_sendStart();
+        public void ecall_sendQuit();
+        public uint64_t ecall_getAbortResult(int thid);
+        public uint64_t ecall_getCommitResult(int thid);
     };
 
 };
