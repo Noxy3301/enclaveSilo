@@ -44,6 +44,8 @@
 
 #include "../Include/consts.h"
 
+#include "../Include/random.h"
+
 
 
 /* 
@@ -522,13 +524,15 @@ void ecall_initDB() {
     DurableEpoch = 0;
 }
 
-void makeProcedure(std::vector<Procedure> &pro, uint64_t rcd_pro[MAX_OPE][2]) {
+void makeProcedure(std::vector<Procedure> &pro, Xoroshiro128Plus &rnd) {
     pro.clear();
     for (int i = 0; i < MAX_OPE; i++) {
-        if (rcd_pro[i][0] == 0) {
-            pro.emplace_back(Ope::READ, rcd_pro[i][1]);
+        uint64_t tmpkey, tmpope;
+        tmpkey = rnd.next() % TUPLE_NUM;
+        if ((rnd.next() % 100) == RRAITO) {
+            pro.emplace_back(Ope::READ, tmpkey);
         } else {
-            pro.emplace_back(Ope::WRITE, rcd_pro[i][1]);
+            pro.emplace_back(Ope::WRITE, tmpkey);
         }
     }
 }
@@ -550,6 +554,12 @@ void ecall_worker_th(int thid) {
     TxExecutor trans(thid);
     returnResult &myres = std::ref(results[thid]);
     uint64_t epoch_timer_start, epoch_timer_stop;
+    
+    unsigned init_seed;
+    sgx_read_rand((unsigned char *) &init_seed, 4);
+    Xoroshiro128Plus rnd(init_seed);
+
+    // rnd.init()
 
     while (true) {
         if (__atomic_load_n(&start, __ATOMIC_ACQUIRE)) break;
@@ -560,20 +570,9 @@ void ecall_worker_th(int thid) {
     while (true) {
         if (__atomic_load_n(&quit, __ATOMIC_ACQUIRE)) break;
         
-        // procedure型で～ってやるのがめんどいので、数値だけ生成してもらって内部で解釈しなおす
-        uint64_t rcd_pro[MAX_OPE][2];
-        for (int i = 0; i < MAX_OPE; i++) {
-            uint64_t tmpkey, tmpope;
-            sgx_read_rand((unsigned char *) &tmpkey, 8);
-            sgx_read_rand((unsigned char *) &tmpope, 8);
-            rcd_pro[i][1] = tmpkey % TUPLE_NUM; //zipf使えない関係でskew考慮できないのでYCSB:false前提で、やろうと思えばできそう？
-            if ((tmpope % 100) < RRAITO) {
-                rcd_pro[i][0] = 0;
-            } else {
-                rcd_pro[i][0] = 1;
-            }
-        }
-        makeProcedure(trans.pro_set_, rcd_pro); // ocallで生成したprocedureをTxExecutorに移し替える
+        // uint64_t s = rdtscp`();
+        makeProcedure(trans.pro_set_, rnd); // ocallで生成したprocedureをTxExecutorに移し替える
+        // printf("%ld\n", rdtscp() - s);
 
     RETRY:
         if (thid == 0) leaderWork(epoch_timer_start, epoch_timer_stop);
