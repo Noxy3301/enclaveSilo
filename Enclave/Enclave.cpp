@@ -559,6 +559,8 @@ void ecall_worker_th(int thid) {
     sgx_read_rand((unsigned char *) &init_seed, 4);
     Xoroshiro128Plus rnd(init_seed);
 
+    // Xoroshiro128Plus rnd(123456);   //seed値に使っている？とりあえず定数で置いておく
+
     // rnd.init()
 
     while (true) {
@@ -570,11 +572,10 @@ void ecall_worker_th(int thid) {
     while (true) {
         if (__atomic_load_n(&quit, __ATOMIC_ACQUIRE)) break;
         
-        // uint64_t s = rdtscp`();
         makeProcedure(trans.pro_set_, rnd); // ocallで生成したprocedureをTxExecutorに移し替える
-        // printf("%ld\n", rdtscp() - s);
 
     RETRY:
+
         if (thid == 0) leaderWork(epoch_timer_start, epoch_timer_stop);
         if (__atomic_load_n(&quit, __ATOMIC_ACQUIRE)) break;
 
@@ -591,7 +592,7 @@ void ecall_worker_th(int thid) {
                 return;
             }
         }
-
+   
         if (trans.validationPhase()) {
             trans.writePhase();
             storeRelease(myres.local_commit_counts_, loadAcquire(myres.local_commit_counts_) + 1);
@@ -601,7 +602,6 @@ void ecall_worker_th(int thid) {
             goto RETRY;
         }
     }
-
     return;
 }
 

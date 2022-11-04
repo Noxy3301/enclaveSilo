@@ -198,12 +198,10 @@ void worker_th(int thid, int &ready) {
     }
 
     returnResult ret;
-    // thread.emplace_backで直接渡せる気がしないし、こっちで受け取ってResultの下処理をしたい
-    ecall_worker_th(global_eid, thid);
+    ecall_worker_th(global_eid, thid);  // thread.emplace_backで直接渡せる気がしないし、こっちで受け取ってResultの下処理をしたい
     ecall_getAbortResult(global_eid, &ret.local_abort_counts_, thid);
     ecall_getCommitResult(global_eid, &ret.local_commit_counts_, thid);
 
-    // TODO: get return and collect them
     SiloResult[thid].local_commit_counts_ = ret.local_commit_counts_ ;
     SiloResult[thid].local_abort_counts_ = ret.local_abort_counts_;
     // std::cout << "worker_end" << std::endl;
@@ -274,7 +272,7 @@ int SGX_CDECL main() {
     chrono::system_clock::time_point p1, p2, p3, p4, p5;
 
     std::cout << "esilo: Silo_logging running within Enclave" << std::endl;
-    std::cout << "transplanted from silo_minimum(commitID:2513440)" << std::endl;
+    std::cout << "transplanted from silo_minimum(commitID:f7a3577)" << std::endl;
     displayParameter();
 
     p1 = chrono::system_clock::now();
@@ -289,7 +287,6 @@ int SGX_CDECL main() {
     p2 = chrono::system_clock::now();
 
     ecall_initDB(global_eid);
-
     LoggerAffinity affin;
     affin.init(THREAD_NUM, LOGGER_NUM); // logger/worker実行threadの決定
 
