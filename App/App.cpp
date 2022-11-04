@@ -272,7 +272,7 @@ int SGX_CDECL main() {
     chrono::system_clock::time_point p1, p2, p3, p4, p5;
 
     std::cout << "esilo: Silo_logging running within Enclave" << std::endl;
-    std::cout << "transplanted from silo_minimum(commitID:f7a3577)" << std::endl;
+    std::cout << "transplanted from silo_minimum(commitID:c1244f6)" << std::endl;
     displayParameter();
 
     p1 = chrono::system_clock::now();

@@ -529,7 +529,7 @@ void makeProcedure(std::vector<Procedure> &pro, Xoroshiro128Plus &rnd) {
     for (int i = 0; i < MAX_OPE; i++) {
         uint64_t tmpkey, tmpope;
         tmpkey = rnd.next() % TUPLE_NUM;
-        if ((rnd.next() % 100) == RRAITO) {
+        if ((rnd.next() % 100) < RRAITO) {
             pro.emplace_back(Ope::READ, tmpkey);
         } else {
             pro.emplace_back(Ope::WRITE, tmpkey);
