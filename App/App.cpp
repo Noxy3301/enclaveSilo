@@ -191,14 +191,14 @@ std::vector<Result> SiloResult(THREAD_NUM);
 
 // MARK: thread function
 
-void worker_th(int thid, int &ready) {
+void worker_th(int thid, int gid, int &ready) {
     __atomic_store_n(&ready, 1, __ATOMIC_RELEASE);
     while (true) {
         if (__atomic_load_n(&threadReady, __ATOMIC_ACQUIRE)) break;
     }
 
     returnResult ret;
-    ecall_worker_th(global_eid, thid);  // thread.emplace_backで直接渡せる気がしないし、こっちで受け取ってResultの下処理をしたい
+    ecall_worker_th(global_eid, thid, gid);  // thread.emplace_backで直接渡せる気がしないし、こっちで受け取ってResultの下処理をしたい
     ecall_getAbortResult(global_eid, &ret.local_abort_counts_, thid);
     ecall_getCommitResult(global_eid, &ret.local_commit_counts_, thid);
 
@@ -208,7 +208,7 @@ void worker_th(int thid, int &ready) {
 }
 
 void logger_th(int thid) {
-
+    ecall_logger_th(global_eid, thid);
 }
 
 // MARK: utilities
@@ -272,7 +272,7 @@ int SGX_CDECL main() {
     chrono::system_clock::time_point p1, p2, p3, p4, p5;
 
     std::cout << "esilo: Silo_logging running within Enclave" << std::endl;
-    std::cout << "transplanted from silo_minimum(commitID:c1244f6)" << std::endl;
+    std::cout << "transplanted from silo_minimum(commitID:eff36ff)" << std::endl;
     displayParameter();
 
     p1 = chrono::system_clock::now();
@@ -300,7 +300,7 @@ int SGX_CDECL main() {
     for (auto itr = affin.nodes_.begin(); itr != affin.nodes_.end(); itr++, j++) {
         lthv.emplace_back(logger_th, j);    // TODO: add some arguments
         for (auto wcpu = itr->worker_cpu_.begin(); wcpu != itr->worker_cpu_.end(); wcpu++, i++) {
-            wthv.emplace_back(worker_th, i, std::ref(readys[i]));  // TODO: add some arguments
+            wthv.emplace_back(worker_th, i, j, std::ref(readys[i]));  // TODO: add some arguments
         }
     }
     
