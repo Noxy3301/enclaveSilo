@@ -150,6 +150,8 @@ void ecall_worker_th(int thid, int gid) {
     RETRY:
 
         if (thid == 0) leaderWork(epoch_timer_start, epoch_timer_stop);
+        trans.durableEpochWork(epoch_timer_start, epoch_timer_stop, quit);
+        
         if (__atomic_load_n(&quit, __ATOMIC_ACQUIRE)) break;
 
         trans.begin();

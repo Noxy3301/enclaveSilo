@@ -253,5 +253,5 @@ void TxExecutor::durableEpochWork(uint64_t &epoch_timer_start,
     if (loadAcquire(quit)) return;
   }
   if (log_buffer_pool_.current_buffer_==NULL) std::abort();
-  sres_lg_->local_wait_depoch_latency_ += rdtscp() - t;
+  // sres_lg_->local_wait_depoch_latency_ += rdtscp() - t;
 }
