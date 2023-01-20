@@ -52,6 +52,8 @@
 #include "include/util.h"
 #include "include/zipf.h"
 
+#include "include/debug.h"
+
 
 std::vector<Tuple> Table(TUPLE_NUM);
 std::vector<uint64_t> ThLocalEpoch(THREAD_NUM);
@@ -65,21 +67,6 @@ Notifier notifier;
 
 bool start = false;
 bool quit = false;
-
-
-/* 
- * printf: 
- *   Invokes OCALL to display the enclave buffer to the terminal.
- */
-int printf(const char* fmt, ...) {
-    char buf[BUFSIZ] = { '\0' };
-    va_list ap;
-    va_start(ap, fmt);
-    vsnprintf(buf, BUFSIZ, fmt, ap);
-    va_end(ap);
-    ocall_print_string(buf);
-    return (int)strnlen(buf, BUFSIZ - 1) + 1;
-}
 
 void ecall_initDB() {
     // init Table
