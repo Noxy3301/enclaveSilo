@@ -164,6 +164,10 @@ void ecall_worker_th(int thid, int gid) {
             goto RETRY;
         }
     }
+
+    trans.log_buffer_pool_.terminate();
+    logger->worker_end(thid);
+
     return;
 }
 

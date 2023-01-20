@@ -43,7 +43,7 @@ void Logger::logging(bool quit) {
         if (log_buffer->max_epoch_ > max_epoch) {
             max_epoch = log_buffer->max_epoch_;
         }
-        // log_buffer->write(logfile_, byte_count_);    TODO: SGX用のやつに変えるから一旦パス
+        log_buffer->write(logfile_, byte_count_); //TODO: SGX用のやつに変えるから一旦パス
         // log_buffer->pass_nid(nid_buffer_, nid_stats_, deq_time);
         // log_buffer->pass_nidを実装していないのでここでmin_epochとmax_epochを初期化する
         log_buffer->min_epoch_ = ~(uint64_t)0;

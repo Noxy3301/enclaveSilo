@@ -11,6 +11,7 @@
 #include "common.h"
 #include "log_writer.h"
 #include "util.h"   // for waitTime_us
+#include "debug.h"
 
 #include "../../Include/result.h"
 
@@ -47,7 +48,7 @@ class LogBuffer {
             void *ptr = log_set_ptr_ = new LogRecord[LOG_ALLOC_SIZE];
             std::size_t space = LOG_ALLOC_SIZE * sizeof(LogRecord);
             std::align(512, LOG_BUFFER_SIZE * sizeof(LogRecord), ptr, space);
-            if (space < LOG_BUFFER_SIZE * sizeof(LogRecord)) // printf("ERR!");    // TODO: ERRをdebugで定義してocall変換するかどうか
+            if (space < LOG_BUFFER_SIZE * sizeof(LogRecord)) printf("ERR!");    // TODO: ERRをdebugで定義してocall変換するかどうか
             log_set_ = (LogRecord*)ptr;
         }
 
@@ -73,8 +74,8 @@ class LogBuffer {
             size_t header_size = sizeof(LogHeader);
             size_t record_size = sizeof(LogRecord) * log_header.logRecNum_;
             byte_count += header_size + record_size;
-            logfile.write((void*)&log_header, header_size);
-            logfile.write((void*)log_set_, record_size);
+            // logfile.write((void*)&log_header, header_size);
+            // logfile.write((void*)log_set_, record_size);
             // clear for next transactions
             log_set_size_ = 0;
         }
