@@ -6,9 +6,11 @@
 #include "include/notifier.h"
 // #include "include/debug.h"
 #include "include/logger.h"
+#include "include/debug.h"
 
 #include "Enclave_t.h"
 #include "sgx_thread.h"
+#include "sgx_tseal.h"
 
 void PepochFile::open() {
     // TODO: SGX用に変える
@@ -31,9 +33,19 @@ void PepochFile::open() {
 }
 
 void PepochFile::write(std::uint64_t epoch) {
-    // TODO: SGX用に変える
-    // *addr_ = epoch;
-    // ::msync(addr_, sizeof(std::uint64_t), MS_SYNC);
+    int ocall_ret;
+    sgx_status_t res, ocall_status;
+    size_t size = sizeof(uint64_t);
+    size_t sealed_size = sizeof(sgx_sealed_data_t) + size;
+    uint8_t* sealed_data = (uint8_t*)malloc(sealed_size);
+    // sgx_seal_data(0, NULL, plaintext_len, plaintext, ciph_size, (sgx_sealed_data_t *) sealed);
+    res = sgx_seal_data(0, NULL, size, (uint8_t*)&epoch, sealed_size, (sgx_sealed_data_t*)sealed_data);
+    assert(res == SGX_SUCCESS);
+    ocall_status = ocall_save_pepochfile(&ocall_ret, sealed_data, sealed_size);
+    free(sealed_data);
+
+    if (ocall_ret != 0) printf("ERR! ocall_ret != 0\n");
+    if (ocall_status != SGX_SUCCESS) printf("ERR! ocall_status != SGX_SUCCESS\n");
 }
 
 void PepochFile::close() {

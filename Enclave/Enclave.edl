@@ -40,6 +40,8 @@ enclave {
 
     untrusted {
         void ocall_print_string([in, string] const char *str);
+        int ocall_save_logfile(int thid, [in, size=sealed_size]const uint8_t* sealed_data, size_t sealed_size);
+        int ocall_save_pepochfile([in, size=sealed_size]const uint8_t* sealed_data, size_t sealed_size);
     };
     
     trusted {
@@ -50,6 +52,8 @@ enclave {
         public void ecall_sendQuit();
         public uint64_t ecall_getAbortResult(int thid);
         public uint64_t ecall_getCommitResult(int thid);
+        public void ecall_showLoggerResult(int thid);
+        public uint64_t ecall_showDurableEpoch();
     };
 
 };

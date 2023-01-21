@@ -2,6 +2,7 @@
 // #include <sys/stat.h>   // fileの状態を確認できるすごいやつ
 
 #include "include/logger.h"
+#include "include/debug.h"
 
 #include "Enclave_t.h"
 #include "sgx_thread.h"
@@ -43,7 +44,7 @@ void Logger::logging(bool quit) {
         if (log_buffer->max_epoch_ > max_epoch) {
             max_epoch = log_buffer->max_epoch_;
         }
-        log_buffer->write(logfile_, byte_count_); //TODO: SGX用のやつに変えるから一旦パス
+        log_buffer->write(thid_, logfile_, byte_count_); //TODO: SGX用のやつに変えるから一旦パス
         // log_buffer->pass_nid(nid_buffer_, nid_stats_, deq_time);
         // log_buffer->pass_nidを実装していないのでここでmin_epochとmax_epochを初期化する
         log_buffer->min_epoch_ = ~(uint64_t)0;
@@ -127,7 +128,7 @@ void Logger::worker() {
     // Logger終わったンゴ連絡
     notifier_stats_.logger_end(this);
     logger_end();
-    show_result();
+    // show_result();
 }
 
 void Logger::worker_end(int thid) {
@@ -162,4 +163,7 @@ void Logger::show_result() {
     //      <<" throughput[B/s]=" << byte_count_/(write_latency_/cps)
     //      <<" wait_latency[s]=" << wait_latency_/cps
     //      << endl;
+
+    printf("Logger#%d byte_count[B]=%zu write_latency[s]=%lf throughput[B/s]=%lf  wait_latency[s]=%lf\n", 
+            thid_, byte_count_, write_latency_/cps, byte_count_/(write_latency_/cps), wait_latency_/cps);
 }

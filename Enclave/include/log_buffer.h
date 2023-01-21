@@ -13,6 +13,8 @@
 #include "util.h"   // for waitTime_us
 #include "debug.h"
 
+#include "sgx_tseal.h"
+
 #include "../../Include/result.h"
 
 #define LOG_BUFFER_SIZE (BUFFER_SIZE*1024/sizeof(LogRecord))
@@ -61,7 +63,7 @@ class LogBuffer {
         }
 
         template<class T>
-        void write(T &logfile, size_t &byte_count) {
+        void write(int thid, T &logfile, size_t &byte_count) {
             if (log_set_size_ == 0) return;
             // prepare header
             alignas(512) LogHeader log_header;
@@ -73,9 +75,9 @@ class LogBuffer {
             // write to file
             size_t header_size = sizeof(LogHeader);
             size_t record_size = sizeof(LogRecord) * log_header.logRecNum_;
-            byte_count += header_size + record_size;
-            // logfile.write((void*)&log_header, header_size);
-            // logfile.write((void*)log_set_, record_size);
+            byte_count += sizeof(sgx_sealed_data_t) + header_size + sizeof(sgx_sealed_data_t) + record_size;
+            logfile.write(thid, (void*)&log_header, header_size);
+            logfile.write(thid, (void*)log_set_, record_size);
             // clear for next transactions
             log_set_size_ = 0;
         }

@@ -30,7 +30,7 @@ class NotificationId {
 
 class PepochFile {  // A:siloRでpepochを書き出しているのでそれに則っているらしい
     private:
-        std::string file_name_ = "log0/pepoch";
+        std::string file_name_ = "logs/pepoch";
         std::uint64_t *addr_;
         int fd_ = -1;
 
