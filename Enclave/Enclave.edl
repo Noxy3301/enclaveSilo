@@ -33,20 +33,27 @@
 
 enclave {
     
+    from "sgx_tstdc.edl" import sgx_thread_wait_untrusted_event_ocall, sgx_thread_set_untrusted_event_ocall, sgx_thread_setwait_untrusted_events_ocall, sgx_thread_set_multiple_untrusted_events_ocall;
+    
     include "user_types.h" /* buffer_t */
     include "stdint.h"
 
     untrusted {
         void ocall_print_string([in, string] const char *str);
+        int ocall_save_logfile(int thid, [in, size=sealed_size]const uint8_t* sealed_data, size_t sealed_size);
+        int ocall_save_pepochfile([in, size=sealed_size]const uint8_t* sealed_data, size_t sealed_size);
     };
     
     trusted {
         public void ecall_initDB();
-        public void ecall_worker_th(int thid);
+        public void ecall_worker_th(int thid, int gid);
+        public void ecall_logger_th(int thid);
         public void ecall_sendStart();
         public void ecall_sendQuit();
         public uint64_t ecall_getAbortResult(int thid);
         public uint64_t ecall_getCommitResult(int thid);
+        public void ecall_showLoggerResult(int thid);
+        public uint64_t ecall_showDurableEpoch();
     };
 
 };

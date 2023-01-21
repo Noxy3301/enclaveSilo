@@ -46,6 +46,12 @@
 #include <vector>
 #include <thread>
 #include <chrono>
+#include <atomic>
+
+// logfile生成用
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <fstream> //filestream
 
 #include "include/random.h"
 #include "include/zipf.h"
@@ -191,14 +197,14 @@ std::vector<Result> SiloResult(THREAD_NUM);
 
 // MARK: thread function
 
-void worker_th(int thid, int &ready) {
+void worker_th(int thid, int gid, int &ready) {
     __atomic_store_n(&ready, 1, __ATOMIC_RELEASE);
     while (true) {
         if (__atomic_load_n(&threadReady, __ATOMIC_ACQUIRE)) break;
     }
 
     returnResult ret;
-    ecall_worker_th(global_eid, thid);  // thread.emplace_backで直接渡せる気がしないし、こっちで受け取ってResultの下処理をしたい
+    ecall_worker_th(global_eid, thid, gid);  // thread.emplace_backで直接渡せる気がしないし、こっちで受け取ってResultの下処理をしたい
     ecall_getAbortResult(global_eid, &ret.local_abort_counts_, thid);
     ecall_getCommitResult(global_eid, &ret.local_commit_counts_, thid);
 
@@ -208,7 +214,7 @@ void worker_th(int thid, int &ready) {
 }
 
 void logger_th(int thid) {
-
+    ecall_logger_th(global_eid, thid);
 }
 
 // MARK: utilities
@@ -265,6 +271,77 @@ void displayResult() {
     cout << "throughput[tps]:\t" << result << endl;
 }
 
+void create_logfiles(int logger_num) {
+    // 複数回テストするときにファイル処理がめんどいのでコマンドで消し飛ばす
+    char command[128];
+	sprintf(command, "rm -f -r logs");
+	system(command);
+    
+    if (::mkdir("logs", 0755)) printf("ERR!");
+    // log*.sealの生成
+    for (int i = 0; i < logger_num; i++) {
+        std::string filename = "logs/log" + to_string(i) + ".seal";
+        int fd_ = ::open(filename.c_str(), O_WRONLY|O_CREAT, 0644);
+        if (fd_ == -1) {
+                perror("open failed");
+                std::abort();
+        }
+    }
+    // pepochの生成
+    std::string filename = "logs/pepoch.seal";
+    int fd_ = ::open(filename.c_str(), O_WRONLY|O_CREAT, 0644);
+    if (fd_ == -1) {
+            perror("open failed");
+            std::abort();
+    }
+}
+
+int ocall_is_logfile() {
+
+}
+
+void write_sealData(std::string filePath, const uint8_t* sealed_data, const size_t sealed_size) {
+    int fd_;
+    fd_ = ::open(filePath.c_str(), O_WRONLY|O_APPEND);
+    size_t s = 0;
+    while (s < sealed_size) {  // writeは最大size - s(byte)だけ書き出すから事故対策でwhile loopしている？
+        ssize_t r = ::write(fd_, (char*)sealed_data + s, sealed_size - s);    // returnは書き込んだbyte数
+        if (r <= 0) {
+            perror("write failed");
+            std::abort();
+        }
+        s += r;
+    }
+
+    if (::fsync(fd_) == -1) {
+        perror("fsync failed");
+        std::abort();
+    }
+
+    if (::close(fd_) == -1) {
+        perror("close failed");
+        std::abort();
+    }
+}
+
+std::atomic<int> ocall_count(0);
+
+int ocall_save_logfile(int thid, const uint8_t* sealed_data, const size_t sealed_size) {
+    int expected = ocall_count.load();
+    while (!ocall_count.compare_exchange_weak(expected, expected + 1));
+    std::string filePath = "logs/log" + to_string(thid) + ".seal";
+    write_sealData(filePath, sealed_data, sealed_size);
+    return 0;
+}
+
+int ocall_save_pepochfile(const uint8_t* sealed_data, const size_t sealed_size) {
+    int expected = ocall_count.load();
+    while (!ocall_count.compare_exchange_weak(expected, expected + 1));
+    std::string filePath = "logs/pepoch.seal";
+    write_sealData(filePath, sealed_data, sealed_size);
+    return 0;
+}
+
 
 /* Application entry */
 int SGX_CDECL main() {
@@ -272,7 +349,7 @@ int SGX_CDECL main() {
     chrono::system_clock::time_point p1, p2, p3, p4, p5;
 
     std::cout << "esilo: Silo_logging running within Enclave" << std::endl;
-    std::cout << "transplanted from silo_minimum(commitID:c1244f6)" << std::endl;
+    std::cout << "transplanted from silo_minimum(commitID:5636035)" << std::endl;
     displayParameter();
 
     p1 = chrono::system_clock::now();
@@ -294,13 +371,15 @@ int SGX_CDECL main() {
     std::vector<std::thread> lthv;
     std::vector<std::thread> wthv;
 
+    create_logfiles(LOGGER_NUM);
+
     p3 = chrono::system_clock::now();
 
     int i = 0, j = 0;
     for (auto itr = affin.nodes_.begin(); itr != affin.nodes_.end(); itr++, j++) {
         lthv.emplace_back(logger_th, j);    // TODO: add some arguments
         for (auto wcpu = itr->worker_cpu_.begin(); wcpu != itr->worker_cpu_.end(); wcpu++, i++) {
-            wthv.emplace_back(worker_th, i, std::ref(readys[i]));  // TODO: add some arguments
+            wthv.emplace_back(worker_th, i, j, std::ref(readys[i]));  // TODO: add some arguments
         }
     }
     
@@ -317,6 +396,10 @@ int SGX_CDECL main() {
 
     p5 = chrono::system_clock::now();
 
+    for (int i = 0; i < LOGGER_NUM; i++) {
+        ecall_showLoggerResult(global_eid, i);
+    }
+
     double duration1 = static_cast<double>(chrono::duration_cast<chrono::microseconds>(p2 - p1).count() / 1000.0);
     double duration2 = static_cast<double>(chrono::duration_cast<chrono::microseconds>(p3 - p2).count() / 1000.0);
     double duration3 = static_cast<double>(chrono::duration_cast<chrono::microseconds>(p4 - p3).count() / 1000.0);
@@ -329,6 +412,10 @@ int SGX_CDECL main() {
 
     displayResult();
 
+    std::cout << "[info]\tocall_count(write):\t" << ocall_count.load() << std::endl;
+    uint64_t ret_durableEpoch = 0;
+    ecall_showDurableEpoch(global_eid, &ret_durableEpoch);
+    std::cout << "[info]\tdurableEpoch:\t" << ret_durableEpoch << std::endl;
 
     /* Destroy the enclave */
     sgx_destroy_enclave(global_eid);
