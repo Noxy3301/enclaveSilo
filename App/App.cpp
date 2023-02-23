@@ -242,10 +242,11 @@ void displayParameter() {
     cout << "#buffer_size:\t" << BUFFER_SIZE << endl;
 }
 
-void displayResult() {
-    uint64_t total_commit_counts_ = 0;
-    uint64_t total_abort_counts_ = 0;
 
+uint64_t total_commit_counts_ = 0;
+uint64_t total_abort_counts_ = 0;
+
+void displayResult() {
     // 各threadのcommit/abort数表示
     for (int i = 0; i < THREAD_NUM; i++) {
         cout << "thread#" << i << "\tcommit: " << SiloResult[i].local_commit_counts_ << "\tabort:" << SiloResult[i].local_abort_counts_ << endl;
@@ -336,7 +337,7 @@ int SGX_CDECL main() {
     chrono::system_clock::time_point p1, p2, p3, p4, p5, p6;
 
     std::cout << "esilo: Silo_logging running within Enclave" << std::endl;
-    std::cout << "ported from silo_minimum(commitID:932312a)" << std::endl;
+    std::cout << "ported from silo_minimum(commitID:a720168)" << std::endl;
     displayParameter();
 
     p1 = chrono::system_clock::now();
@@ -403,6 +404,15 @@ int SGX_CDECL main() {
     uint64_t ret_durableEpoch = 0;
     ecall_showDurableEpoch(global_eid, &ret_durableEpoch);
     std::cout << "[info]\tdurableEpoch:\t" << ret_durableEpoch << std::endl;
+
+    std::cout << "=== for copy&paste ===" << std::endl;
+    std::cout << total_commit_counts_ << std::endl;
+    std::cout << total_abort_counts_ << std::endl;
+    std::cout << (double)total_abort_counts_ / (double)(total_commit_counts_ + total_abort_counts_) << std::endl;
+    uint64_t result = total_commit_counts_ / EXTIME;
+    std::cout << powl(10.0, 9.0) / result * THREAD_NUM << std::endl;;  // latency
+    std::cout << ret_durableEpoch << std::endl;
+    std::cout << result << std::endl;; // throughput
 
     /* Destroy the enclave */
     sgx_destroy_enclave(global_eid);
