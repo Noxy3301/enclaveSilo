@@ -179,10 +179,6 @@ void LoggerAffinity::init(unsigned worker_num, unsigned logger_num) {
     }
 }
 
-// MARK: global variables
-
-bool threadReady = false;
-
 // MARK: siloResult
 
 class Result {
@@ -197,12 +193,7 @@ std::vector<Result> SiloResult(THREAD_NUM);
 
 // MARK: thread function
 
-void worker_th(int thid, int gid, int &ready) {
-    __atomic_store_n(&ready, 1, __ATOMIC_RELEASE);
-    while (true) {
-        if (__atomic_load_n(&threadReady, __ATOMIC_ACQUIRE)) break;
-    }
-
+void worker_th(int thid, int gid) {
     returnResult ret;
     ecall_worker_th(global_eid, thid, gid);  // thread.emplace_backで直接渡せる気がしないし、こっちで受け取ってResultの下処理をしたい
     ecall_getAbortResult(global_eid, &ret.local_abort_counts_, thid);
@@ -247,8 +238,8 @@ void displayParameter() {
     cout << "#ycsb:\t\t" << YCSB << endl;
     cout << "#zipf_skew:\t" << ZIPF_SKEW << endl;
     cout << "#logger_num:\t" << LOGGER_NUM << endl;
-    // cout << "#buffer_num:\t" << BUFFER_NUM << endl;
-    // cout << "#buffer_size:\t" << BUFFER_SIZE << endl;
+    cout << "#buffer_num:\t" << BUFFER_NUM << endl;
+    cout << "#buffer_size:\t" << BUFFER_SIZE << endl;
 }
 
 void displayResult() {
@@ -262,13 +253,13 @@ void displayResult() {
         total_abort_counts_ += SiloResult[i].local_abort_counts_;
     }
 
-    cout << "commit_counts_:\t" << total_commit_counts_ << endl;
-    cout << "abort_counts_:\t" << total_abort_counts_ << endl;
-    cout << "abort_rate:\t" << (double)total_abort_counts_ / (double)(total_commit_counts_ + total_abort_counts_) << endl;
+    cout << "[info]\tcommit_counts_:\t" << total_commit_counts_ << endl;
+    cout << "[info]\tabort_counts_:\t" << total_abort_counts_ << endl;
+    cout << "[info]\tabort_rate:\t" << (double)total_abort_counts_ / (double)(total_commit_counts_ + total_abort_counts_) << endl;
 
     uint64_t result = total_commit_counts_ / EXTIME;
-    cout << "latency[ns]:\t" << powl(10.0, 9.0) / result * THREAD_NUM << endl;
-    cout << "throughput[tps]:\t" << result << endl;
+    cout << "[info]\tlatency[ns]:\t" << powl(10.0, 9.0) / result * THREAD_NUM << endl;
+    cout << "[info]\tthroughput[tps]:\t" << result << endl;
 }
 
 void create_logfiles(int logger_num) {
@@ -294,10 +285,6 @@ void create_logfiles(int logger_num) {
             perror("open failed");
             std::abort();
     }
-}
-
-int ocall_is_logfile() {
-
 }
 
 void write_sealData(std::string filePath, const uint8_t* sealed_data, const size_t sealed_size) {
@@ -346,10 +333,10 @@ int ocall_save_pepochfile(const uint8_t* sealed_data, const size_t sealed_size) 
 /* Application entry */
 int SGX_CDECL main() {
 
-    chrono::system_clock::time_point p1, p2, p3, p4, p5;
+    chrono::system_clock::time_point p1, p2, p3, p4, p5, p6;
 
     std::cout << "esilo: Silo_logging running within Enclave" << std::endl;
-    std::cout << "transplanted from silo_minimum(commitID:5636035)" << std::endl;
+    std::cout << "ported from silo_minimum(commitID:932312a)" << std::endl;
     displayParameter();
 
     p1 = chrono::system_clock::now();
@@ -367,7 +354,6 @@ int SGX_CDECL main() {
     LoggerAffinity affin;
     affin.init(THREAD_NUM, LOGGER_NUM); // logger/worker実行threadの決定
 
-    std::vector<int> readys(THREAD_NUM);
     std::vector<std::thread> lthv;
     std::vector<std::thread> wthv;
 
@@ -379,22 +365,22 @@ int SGX_CDECL main() {
     for (auto itr = affin.nodes_.begin(); itr != affin.nodes_.end(); itr++, j++) {
         lthv.emplace_back(logger_th, j);    // TODO: add some arguments
         for (auto wcpu = itr->worker_cpu_.begin(); wcpu != itr->worker_cpu_.end(); wcpu++, i++) {
-            wthv.emplace_back(worker_th, i, j, std::ref(readys[i]));  // TODO: add some arguments
+            wthv.emplace_back(worker_th, i, j);  // TODO: add some arguments
         }
     }
     
+    ecall_waitForReady(global_eid);
     p4 = chrono::system_clock::now();
-
-    waitForReady(readys);
-    __atomic_store_n(&threadReady, true, __ATOMIC_RELEASE);
     ecall_sendStart(global_eid);
     std::this_thread::sleep_for(std::chrono::milliseconds(1000 * EXTIME));
     ecall_sendQuit(global_eid);
 
+    p5 = chrono::system_clock::now();
+
     for (auto &th : lthv) th.join();
     for (auto &th : wthv) th.join();
 
-    p5 = chrono::system_clock::now();
+    p6 = chrono::system_clock::now();
 
     for (int i = 0; i < LOGGER_NUM; i++) {
         ecall_showLoggerResult(global_eid, i);
@@ -404,14 +390,15 @@ int SGX_CDECL main() {
     double duration2 = static_cast<double>(chrono::duration_cast<chrono::microseconds>(p3 - p2).count() / 1000.0);
     double duration3 = static_cast<double>(chrono::duration_cast<chrono::microseconds>(p4 - p3).count() / 1000.0);
     double duration4 = static_cast<double>(chrono::duration_cast<chrono::microseconds>(p5 - p4).count() / 1000.0);
+    double duration5 = static_cast<double>(chrono::duration_cast<chrono::microseconds>(p6 - p5).count() / 1000.0);
+
+    displayResult();
 
     std::cout << "[info]\tcreateEnclave:\t" << duration1/1000 << "s.\n";
     std::cout << "[info]\tmakeDB:\t\t" << duration2/1000 << "s.\n";
     std::cout << "[info]\tcreateThread:\t" << duration3/1000 << "s.\n";
     std::cout << "[info]\texecutionTime:\t" << duration4/1000 << "s.\n";
-
-    displayResult();
-
+    std::cout << "[info]\tdestroyThread:\t" << duration5/1000 << "s.\n";
     std::cout << "[info]\tocall_count(write):\t" << ocall_count.load() << std::endl;
     uint64_t ret_durableEpoch = 0;
     ecall_showDurableEpoch(global_eid, &ret_durableEpoch);
