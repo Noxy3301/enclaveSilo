@@ -23,6 +23,12 @@
 #define PAGE_SIZE 4096
 #define LOGSET_SIZE 1000
 
+// Index pattern
+// 0: ideal  - Key can be used as an array index. Thus, O(1) [Default]
+// 1: linear - No index, need to linear scan to search item.
+// 2: OCH    - Using Optimistic Cuckoo Hashing as index. wip
+#define INDEX_PATTERN 0
+
 #include <stdint.h>
 
 struct returnResult {

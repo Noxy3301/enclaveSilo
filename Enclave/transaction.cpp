@@ -31,7 +31,19 @@ void TxExecutor::read(uint64_t key) {
     TIDword expected, check;
     if (searchReadSet(key) || searchWriteSet(key)) goto FINISH_READ;
     Tuple *tuple;
-    tuple = &Table[key];
+
+    // TODO: getとかに一元化したほうが良いかも
+#if INDEX_PATTERN == 0
+        tuple = &Table[key];
+#elif INDEX_PATTERN == 1
+        for (int i = 0; i < TUPLE_NUM; i++) {
+            if (Table[i].key_ == key) {
+                tuple = &Table[key];
+                break;
+            }
+        }
+#endif
+
     expected.obj_ = loadAcquire(tuple->tidword_.obj_);
     
     for (;;) {
@@ -67,7 +79,17 @@ void TxExecutor::write(uint64_t key, uint64_t val) {
     if (re) {   //HACK: 仕様がわかってないよ(田中先生も)
         tuple = re->rcdptr_;
     } else {
+    // TODO: getとかに一元化したほうが良いかも
+#if INDEX_PATTERN == 0
         tuple = &Table[key];
+#elif INDEX_PATTERN == 1
+        for (int i = 0; i < TUPLE_NUM; i++) {
+            if (Table[i].key_ == key) {
+                tuple = &Table[key];
+                break;
+            }
+        }
+#endif
     }
     write_set_.emplace_back(key, tuple, val);
 
