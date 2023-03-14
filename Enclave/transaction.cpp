@@ -24,6 +24,7 @@ void TxExecutor::begin() {
     status_ = TransactionStatus::InFlight;
     max_wset_.obj_ = 0;
     max_rset_.obj_ = 0;
+    abort_res_ = 0;
     nid_ = NotificationId(nid_counter_++, thid_, rdtscp());
 }
 
@@ -154,7 +155,10 @@ bool TxExecutor::validationPhase() {
     // Phase1, sorting write_set_
     sort(write_set_.begin(), write_set_.end());
     lockWriteSet();
-    if (this->status_ == TransactionStatus::Aborted) return false;  // w-w conflict検知時に弾く用
+    if (this->status_ == TransactionStatus::Aborted) {
+        abort_res_ = 1;
+        return false;  // w-w conflict検知時に弾く用
+    }
     asm volatile("":: : "memory");
     atomicStoreThLocalEpoch(thid_, atomicLoadGE());
     asm volatile("":: : "memory");
@@ -165,6 +169,7 @@ bool TxExecutor::validationPhase() {
         check.obj_ = loadAcquire((*itr).rcdptr_->tidword_.obj_);
         if ((*itr).get_tidword().epoch != check.epoch || (*itr).get_tidword().TID != check.TID) {
             this->status_ = TransactionStatus::Aborted;
+            abort_res_ = 2;
             unlockWriteSet();
             return false;
         }
@@ -173,6 +178,7 @@ bool TxExecutor::validationPhase() {
         // 3. the tuple is locked and it isn't included by its write set.
         if (check.lock && !searchWriteSet((*itr).key_)) {
             this->status_ = TransactionStatus::Aborted;
+            abort_res_ = 3;
             unlockWriteSet();
             return false;
         }
@@ -275,5 +281,6 @@ void TxExecutor::durableEpochWork(uint64_t &epoch_timer_start,
     if (loadAcquire(quit)) return;
   }
   if (log_buffer_pool_.current_buffer_==NULL) std::abort();
+  abort_res_ = 4;
   // sres_lg_->local_wait_depoch_latency_ += rdtscp() - t;
 }

@@ -41,6 +41,14 @@ class TxExecutor {
         std::uint32_t nid_counter_ = 0; // Notification ID
         int logger_thid_;
 
+        // Abort reason status
+        // 0 : Commit
+        // 1 : Aborted by failed validation phase 1 (write-write conflict)
+        // 2 : Aborted by failed validation phase 2 (TID of read-set already changed)
+        // 3 : Aborted by failed validation phase 3 (tuple is locked but it isn't included by its write-set)
+        // 4 : Aborted by failure to set current buffer 
+        int abort_res_ = 0;
+
         TxExecutor(int thid);
 
         void begin();
