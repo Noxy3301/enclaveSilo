@@ -257,6 +257,7 @@ uint64_t tocal_abort_res_counts_[4] = {0};
 
 void displayResult() {
     for (int i = 0; i < THREAD_NUM; i++) {
+#if SHOW_DETAILS
         cout << 
         "thread#" << i << 
         "\tcommit: " << SiloResult[i].local_commit_counts_ << 
@@ -266,7 +267,7 @@ void displayResult() {
         "\tabort_VP3: " << SiloResult[i].local_abort_res_counts_[2] <<  // aborted by validation phase 3
         "\tabort_bNULL: " << SiloResult[i].local_abort_res_counts_[3] <<// aborted by NULL current buffer    
         endl;
-
+#endif
         total_commit_counts_ += SiloResult[i].local_commit_counts_;
         total_abort_counts_ += SiloResult[i].local_abort_counts_;
         tocal_abort_res_counts_[0] += SiloResult[i].local_abort_res_counts_[0];
@@ -275,7 +276,7 @@ void displayResult() {
         tocal_abort_res_counts_[3] += SiloResult[i].local_abort_res_counts_[3];
 
     }
-
+#if SHOW_DETAILS
     cout << "[info]\tcommit_counts_:\t" << total_commit_counts_ << endl;
     cout << "[info]\tabort_counts_:\t" << total_abort_counts_ << endl;
     cout << "[info]\t-abort_validation1:\t" << tocal_abort_res_counts_[0] << endl;
@@ -288,6 +289,7 @@ void displayResult() {
     uint64_t result = total_commit_counts_ / EXTIME;
     cout << "[info]\tlatency[ns]:\t" << powl(10.0, 9.0) / result * THREAD_NUM << endl;
     cout << "[info]\tthroughput[tps]:\t" << result << endl;
+#endif
 }
 
 void create_logfiles(int logger_num) {
@@ -362,11 +364,11 @@ int ocall_save_pepochfile(const uint8_t* sealed_data, const size_t sealed_size) 
 int SGX_CDECL main() {
 
     chrono::system_clock::time_point p1, p2, p3, p4, p5, p6;
-
+#if SHOW_DETAILS
     std::cout << "esilo: Silo_logging running within Enclave" << std::endl;
-    std::cout << "ported from silo_minimum(commitID:56ab9f3)" << std::endl;
+    std::cout << "ported from silo_minimum" << std::endl;
     displayParameter();
-
+#endif
     p1 = chrono::system_clock::now();
 
     /* Initialize the enclave */
@@ -420,18 +422,18 @@ int SGX_CDECL main() {
     double duration4 = static_cast<double>(chrono::duration_cast<chrono::microseconds>(p5 - p4).count() / 1000.0);
     double duration5 = static_cast<double>(chrono::duration_cast<chrono::microseconds>(p6 - p5).count() / 1000.0);
 
+    uint64_t ret_durableEpoch = 0;
+    ecall_showDurableEpoch(global_eid, &ret_durableEpoch);
     displayResult();
-
+#if SHOW_DETAILS
     std::cout << "[info]\tcreateEnclave:\t" << duration1/1000 << "s.\n";
     std::cout << "[info]\tmakeDB:\t\t" << duration2/1000 << "s.\n";
     std::cout << "[info]\tcreateThread:\t" << duration3/1000 << "s.\n";
     std::cout << "[info]\texecutionTime:\t" << duration4/1000 << "s.\n";
     std::cout << "[info]\tdestroyThread:\t" << duration5/1000 << "s.\n";
     std::cout << "[info]\tocall_count(write):\t" << ocall_count.load() << std::endl;
-    uint64_t ret_durableEpoch = 0;
-    ecall_showDurableEpoch(global_eid, &ret_durableEpoch);
     std::cout << "[info]\tdurableEpoch:\t" << ret_durableEpoch << std::endl;
-
+#endif
     std::cout << "=== for copy&paste ===" << std::endl;
     std::cout << total_commit_counts_ << std::endl;
     std::cout << total_abort_counts_ << std::endl;
@@ -443,9 +445,11 @@ int SGX_CDECL main() {
 
     /* Destroy the enclave */
     sgx_destroy_enclave(global_eid);
+#if SHOW_DETAILS
     printf("[info]\tSampleEnclave successfully returned.\n");
     printf("[info]\tEnter a character before exit ...\n");
     getchar();
+#endif
     return 0;
 }
 

@@ -163,7 +163,8 @@ void Logger::show_result() {
     //      <<" throughput[B/s]=" << byte_count_/(write_latency_/cps)
     //      <<" wait_latency[s]=" << wait_latency_/cps
     //      << endl;
-
+#if SHOW_DETAILS
     printf("Logger#%d byte_count[B]=%zu write_latency[s]=%lf throughput[B/s]=%lf  wait_latency[s]=%lf\n", 
             thid_, byte_count_, write_latency_/cps, byte_count_/(write_latency_/cps), wait_latency_/cps);
+#endif
 }

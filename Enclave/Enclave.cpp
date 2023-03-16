@@ -53,9 +53,13 @@
 #include "include/zipf.h"
 
 #include "include/debug.h"
+#include "OCH.cpp"
 
-
+#if INDEX_PATTERN == 2
+OptCuckoo<Tuple*> Table(TUPLE_NUM*2);
+#else
 std::vector<Tuple> Table(TUPLE_NUM);
+#endif
 std::vector<uint64_t> ThLocalEpoch(THREAD_NUM);
 std::vector<uint64_t> CTIDW(THREAD_NUM);
 std::vector<uint64_t> ThLocalDurableEpoch(LOGGER_NUM);
@@ -90,13 +94,20 @@ void ecall_initDB() {
     
     // init Table
     for (int i = 0; i < TUPLE_NUM; i++) {
+#if INDEX_PATTERN == 2
+        Tuple *tmp=new Tuple();
+#else
         Tuple *tmp;
         tmp = &Table[i];
+#endif
         tmp->tidword_.epoch = 1;
         tmp->tidword_.latest = 1;
         tmp->tidword_.lock = 0;
         tmp->key_ = random_array[i];
         tmp->val_ = 0;
+#if INDEX_PATTERN == 2
+        Table.put(i,tmp,0);
+#endif
     }
 
     for (int i = 0; i < THREAD_NUM; i++) {

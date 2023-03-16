@@ -23,11 +23,17 @@
 #define PAGE_SIZE 4096
 #define LOGSET_SIZE 1000
 
+// show result details flag
+#define SHOW_DETAILS 0
+
+// no wait optimization
+#define NO_WAIT_LOCKING_IN_VALIDATION 1
+
 // Index pattern
 // 0: ideal  - Key can be used as an array index. Thus, O(1) [Default]
 // 1: linear - No index, need to linear scan to search item.
 // 2: OCH    - Using Optimistic Cuckoo Hashing as index. wip
-#define INDEX_PATTERN 0
+#define INDEX_PATTERN 2
 
 #include <stdint.h>
 
