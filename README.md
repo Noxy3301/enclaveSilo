@@ -8,8 +8,8 @@ Comparison program is [here](https://github.com/Noxy3301/silo_minimum).
 # How to use
 ```
 $ wget https://download.01.org/intel-sgx/latest/linux-latest/distro/ubuntu20.04-server/sgx_linux_x64_sdk_2.19.100.3.bin
-$ chmod 777 sgx_linux_x64_sdk_2.17.100.3.bin
-$ ./sgx_linux_x64_sdk_2.17.100.3.bin
+$ chmod 777 sgx_linux_x64_sdk_2.19.100.3.bin
+$ ./sgx_linux_x64_sdk_2.19.100.3.bin
 [yes]
 $ source {ENVIRONMENT-PATH}   // indicated by green text. 
 $ cd enclaveSilo
