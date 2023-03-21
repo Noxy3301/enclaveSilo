@@ -9,6 +9,7 @@
 
 #include "common.h"
 #include "tsc.h"    // start_clock_記録するように使ってる
+#include "tuple.h"
 
 class NotificationId {
     public:
@@ -22,7 +23,7 @@ class NotificationId {
         NotificationId() { NotificationId(0, 0, 0); }
 
         std::uint64_t epoch() {
-            TIDword tid;
+            Tidword tid;
             tid.obj_ = tid_;
             return tid.epoch;
         }
@@ -30,7 +31,7 @@ class NotificationId {
 
 class PepochFile {  // A:siloRでpepochを書き出しているのでそれに則っているらしい
     private:
-        std::string file_name_ = "logs/pepoch";
+        std::string file_name_ = "log0/pepoch";
         std::uint64_t *addr_;
         int fd_ = -1;
 
@@ -88,8 +89,9 @@ class NidBuffer {
 
 class Notifier {
     private:
+        // std::thread thread_;
         std::mutex mutex_;
-        // std::condition_variable cv_enq_;
+        std::condition_variable cv_enq_;
         std::condition_variable cv_deq_;
         std::condition_variable cv_finish_;
         std::size_t capa_ = 100000000;
@@ -117,7 +119,6 @@ class Notifier {
         PepochFile pepoch_file_;
         NidBuffer buffer_;
         // NotifyStats notify_stats_;
-        // NOTE: latency_logは使えないし使えないのでやめとく(恐らくvectorとarrayの互換性がない？includeしてないだけかもしれないけど)
         // std::vector<std::array<std::uint64_t, 6>> *latency_log_;    //uint64_tが6個で1セットのやつがvectorに入っている
 
         Notifier() {
@@ -127,10 +128,9 @@ class Notifier {
             pepoch_file_.open();
         }
 
-        // latency_log_を使ってないのでデコンストラクタは不要
-        // ~Notifier() {
-        //     delete latency_log_;
-        // }
+        ~Notifier() {
+            // delete latency_log_;
+        }
 
         void add_logger(Logger *logger);
         uint64_t check_durable();
@@ -139,7 +139,7 @@ class Notifier {
         void worker();
         void push(NidBuffer &nid_buffer, bool quit);
         void logger_end(Logger *logger);
-        // void add_latency_log(std::vector<std::array<std::uint64_t,6>> *other_latency_log);
+        void add_latency_log(std::vector<std::array<std::uint64_t,6>> *other_latency_log);
         void display();
 
 };

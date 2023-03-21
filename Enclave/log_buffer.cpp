@@ -8,7 +8,7 @@
 #include "Enclave_t.h"
 #include "sgx_thread.h"
 
-void LogBufferPool::push(std::uint64_t tid, NotificationId &nid, std::vector<WriteElement> &write_set, uint32_t val, bool new_epoch_begins) {
+void LogBufferPool::push(std::uint64_t tid, NotificationId &nid, std::vector<WriteElement<Tuple>> &write_set, bool new_epoch_begins) {
     nid.tid_ = tid;
     nid.t_mid_ = rdtscp();
     assert(current_buffer_ != NULL);
@@ -21,7 +21,7 @@ void LogBufferPool::push(std::uint64_t tid, NotificationId &nid, std::vector<Wri
         // std::this_thread::sleep_for(std::chrono::microseconds(10));
     }
     if (quit_) return;
-    current_buffer_->push(tid, nid, write_set, val);
+    current_buffer_->push(tid, nid, write_set);
     // better full (?)
     if (current_buffer_->log_set_size_ + MAX_OPE > LOG_BUFFER_SIZE) {
       publish();
@@ -33,16 +33,16 @@ void LogBufferPool::push(std::uint64_t tid, NotificationId &nid, std::vector<Wri
     #endif
 };
 
-void LogBuffer::push(std::uint64_t tid, NotificationId &nid, std::vector<WriteElement> &write_set, uint32_t val) {
+void LogBuffer::push(std::uint64_t tid, NotificationId &nid, std::vector<WriteElement<Tuple>> &write_set) {
     // Q:read_only txもあるからwrite_set.size() == 0もあり得てassertで落ちるけど、NDEBUGがONになっている、じゃあAssert置く意味なくない？
     // assert(write_set.size() > 0);   // A:本当に置く意味がないのでこれでOK Q:というかやっぱりここが釈然としない
     // buffering
-    for (auto &itr : write_set) {
-        log_set_[log_set_size_++] = LogRecord(tid, itr.key_, val);
+    for (auto itr = write_set.begin(); itr != write_set.end(); ++itr) {
+        log_set_[log_set_size_++] = LogRecord(tid, (*itr).key_, (char*)"FIXME");
     }
     nid_set_.emplace_back(nid);
     // epoch
-    TIDword tidw;
+    Tidword tidw;
     tidw.obj_ = tid;
     std::uint64_t epoch = tidw.epoch;
     // A:1つのLogbufferに違うEpochのログが入らないかチェックしているらしい

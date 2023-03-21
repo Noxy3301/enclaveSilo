@@ -29,7 +29,6 @@ class LogQueue {
             for (;;) {
                 unsigned int lock = 0;  // expectedとして使う
                 if (my_mutex_.compare_exchange_strong(lock, 1)) return;
-                // std::this_thread::sleep_for(std::chrono::nanoseconds(30));
                 waitTime_ns(30);
             }
         }

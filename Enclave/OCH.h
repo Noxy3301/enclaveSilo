@@ -1,36 +1,4 @@
-/*
- * Copyright (C) 2011-2021 Intel Corporation. All rights reserved.
- *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions
- * are met:
- *
- *   * Redistributions of source code must retain the above copyright
- *     notice, this list of conditions and the following disclaimer.
- *   * Redistributions in binary form must reproduce the above copyright
- *     notice, this list of conditions and the following disclaimer in
- *     the documentation and/or other materials provided with the
- *     distribution.
- *   * Neither the name of Intel Corporation nor the names of its
- *     contributors may be used to endorse or promote products derived
- *     from this software without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
- * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
- * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
- * A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
- * OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
- * SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
- * LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
- * DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
- * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
- * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
- * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- */
-
-#ifndef OCH_CPP
-#define OCH_CPP
+#pragma once
 
 #include <stdarg.h>
 #include <stdio.h> /* vsnprintf */
@@ -44,7 +12,8 @@
 #include <thread>
 #include <cassert>
 #include <unordered_map>
-// #include "common/hash.h"
+
+#include "common/hash.h"
 
 using namespace std;
 
@@ -82,7 +51,6 @@ public:
     }
 };
 
-// key:int->val:T
 template <class T>
 class OptCuckoo
 {
@@ -90,12 +58,12 @@ public:
     class Data
     {
     public:
-        int key;
+        std::string key;
         T val;
         Data()
         {
         }
-        Data(int t_key, T t_val)
+        Data(std::string t_key, T t_val)
         {
             key = t_key;
             val = t_val;
@@ -109,7 +77,7 @@ public:
         Node()
         {
         }
-        Node(unsigned char t_tag, int t_key, T t_val)
+        Node(unsigned char t_tag, std::string t_key, T t_val)
         {
             tag = t_tag;
             data = new Data(t_key, t_val);
@@ -176,16 +144,14 @@ public:
         __sync_add_and_fetch(&key_versions[l][r], 1);
     }
 
-    pair<uint32_t, uint32_t> hash2(int n)
+    pair<uint32_t, uint32_t> hash2(std::string s)
     {
-        // string s = to_string(n);
         uint32_t h1 = 0, h2 = 0;
-        // hashlittle2(s.c_str(), s.length(), &h1, &h2);
-        h1=n,h2=n*109;
+        hashlittle2(s.c_str(), s.length(), &h1, &h2);
         return make_pair(h1, h2);
     }
 
-    T get(int key)
+    T get(std::string key)
     {
         uint32_t h1 = 0, h2 = 0;
         auto res = hash2(key);
@@ -249,7 +215,7 @@ public:
         }
     }
 
-    void put(int key, T val, int TID)
+    void put(std::string key, T val, int TID)
     {
         int i = 0;
         while (!put_impl(key, val, TID))
@@ -263,9 +229,9 @@ public:
         }
     }
 
-    bool put_impl(int key, T val, int TID)
+    bool put_impl(std::string key, T val, int TID)
     {
-        int original_key = key;
+        std::string original_key = key;
         T original_val = val;
         unsigned char original_tag;
 
@@ -386,7 +352,7 @@ public:
             pair<int, int> before = p[p.size() - 1];
             assert(this->table[before.first][before.second] != NULL);
             v.push_back(get_version(before.first, before.second));
-            int key = table[before.first][before.second]->data->key;
+            std::string key = table[before.first][before.second]->data->key;
             T val = table[before.first][before.second]->data->val;
             uint32_t h1 = 0, h2 = 0;
 
@@ -533,5 +499,3 @@ public:
         return true;
     }
 };
-
-#endif

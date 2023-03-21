@@ -39,7 +39,7 @@
 # define MAX_PATH FILENAME_MAX
 
 #include "sgx_urts.h"
-#include "App.h"
+#include "include/App.h"
 #include "Enclave_u.h"
 
 #include <iostream>
@@ -47,15 +47,18 @@
 #include <thread>
 #include <chrono>
 #include <atomic>
+#include <cmath>
 
 // logfile生成用
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <fstream> //filestream
 
-#include "include/random.h"
-#include "include/zipf.h"
 #include "../Include/consts.h"
+#include "../Include/result.h"
+
+#include "include/logger_affinity.h"
+#include "include/util.h"
 
 using namespace std;
 
@@ -131,85 +134,32 @@ void ocall_print_string(const char *str) {
     printf("%s", str);
 }
 
-// MARK: class(LoggerAffinity)
-
-class LoggerNode {
-    public:
-        int logger_cpu_;
-        std::vector<int> worker_cpu_;
-
-        LoggerNode() {}
-};
-
-class LoggerAffinity {
-    public:
-        std::vector<LoggerNode> nodes_;
-        unsigned worker_num_ = 0;
-        unsigned logger_num_ = 0;
-        void init(unsigned worker_num, unsigned logger_num);
-};
-
-void LoggerAffinity::init(unsigned worker_num, unsigned logger_num) {
-    unsigned num_cpus = std::thread::hardware_concurrency();
-    if (logger_num > num_cpus || worker_num > num_cpus) {
-        std::cout << "too many threads" << std::endl;
-    }
-    // LoggerAffinityのworker_numとlogger_numにコピー
-    worker_num_ = worker_num;
-    logger_num_ = logger_num;
-    for (unsigned i = 0; i < logger_num; i++) {
-        nodes_.emplace_back();
-    }
-    unsigned thread_num = logger_num + worker_num;
-    if (thread_num > num_cpus) {
-        for (unsigned i = 0; i < worker_num; i++) {
-            nodes_[i * logger_num/worker_num].worker_cpu_.emplace_back(i);
-        }
-        for (unsigned i = 0; i < logger_num; i++) {
-            nodes_[i].logger_cpu_ = nodes_[i].worker_cpu_.back();
-        }
-    } else {
-        for (unsigned i = 0; i < thread_num; i++) {
-            nodes_[i * logger_num/thread_num].worker_cpu_.emplace_back(i);
-        }
-        for (unsigned i = 0; i < logger_num; i++) {
-            nodes_[i].logger_cpu_ = nodes_[i].worker_cpu_.back();
-            nodes_[i].worker_cpu_.pop_back();
-        }
-    }
-}
-
-// MARK: siloResult
-
-class Result {
-    public:
-        uint64_t local_abort_counts_ = 0;
-        uint64_t local_commit_counts_ = 0;
-        uint64_t total_abort_counts_ = 0;
-        uint64_t total_commit_counts_ = 0;
-
-        uint64_t local_abort_res_counts_[4] = {0};
-};
-
 std::vector<Result> SiloResult(THREAD_NUM);
 
 // MARK: thread function
 
 void worker_th(int thid, int gid) {
-    returnResult ret;
     ecall_worker_th(global_eid, thid, gid);  // thread.emplace_backで直接渡せる気がしないし、こっちで受け取ってResultの下処理をしたい
-    ecall_getAbortResult(global_eid, &ret.local_abort_counts_, thid);
-    ecall_getCommitResult(global_eid, &ret.local_commit_counts_, thid);
+    
+    Result tempResult;
+    ecall_getResult(global_eid, &tempResult.local_abort_counts_, thid, 0);
+    ecall_getResult(global_eid, &tempResult.local_commit_counts_, thid, 1);
+#if ADD_ANALYSIS
+    ecall_getResult(global_eid, &tempResult.local_abort_by_validation1_, thid, 2);
+    ecall_getResult(global_eid, &tempResult.local_abort_by_validation2_, thid, 3);
+    ecall_getResult(global_eid, &tempResult.local_abort_by_validation3_, thid, 4);
+    ecall_getResult(global_eid, &tempResult.local_abort_by_null_buffer_, thid, 5);
+#endif
 
-    SiloResult[thid].local_commit_counts_ = ret.local_commit_counts_ ;
-    SiloResult[thid].local_abort_counts_ = ret.local_abort_counts_;
+    SiloResult[thid].local_abort_counts_ = tempResult.local_abort_counts_;
+    SiloResult[thid].local_commit_counts_ = tempResult.local_commit_counts_;
+#if ADD_ANALYSIS
+    SiloResult[thid].local_abort_by_validation1_ = tempResult.local_abort_by_validation1_;
+    SiloResult[thid].local_abort_by_validation2_ = tempResult.local_abort_by_validation2_;
+    SiloResult[thid].local_abort_by_validation3_ = tempResult.local_abort_by_validation3_;
+    SiloResult[thid].local_abort_by_null_buffer_ = tempResult.local_abort_by_null_buffer_;
+#endif
 
-    // Abortの原因を確認する用
-    for (int i = 0; i < 4; i++) {
-        uint64_t retValue = 0;
-        ecall_getAbortResResult(global_eid, &retValue, thid, i);
-        SiloResult[thid].local_abort_res_counts_[i] = retValue;
-    }
 }
 
 void logger_th(int thid) {
@@ -229,67 +179,6 @@ void waitForReady(const std::vector<int> &readys) {
         }
         if (!failed) break;
     }
-}
-
-// Xoroshiro128Plus rnd;
-// FastZipf zipf(&rnd, ZIPF_SKEW, TUPLE_NUM);  //関数内で宣言すると割り算処理繰り返すからクソ重いぞ！
-
-void displayParameter() {
-    cout << "#clocks_per_us:\t" << CLOCKS_PER_US << endl;
-    cout << "#epoch_time:\t" << EPOCH_TIME << endl;
-    cout << "#extime:\t" << EXTIME << endl;
-    cout << "#max_ope:\t" << MAX_OPE << endl;
-    // cout << "#rmw:\t\t" << RMW << endl;
-    cout << "#rratio:\t" << RRAITO << endl;
-    cout << "#thread_num:\t" << THREAD_NUM << endl;
-    cout << "#tuple_num:\t" << TUPLE_NUM << endl;
-    cout << "#ycsb:\t\t" << YCSB << endl;
-    cout << "#zipf_skew:\t" << ZIPF_SKEW << endl;
-    cout << "#logger_num:\t" << LOGGER_NUM << endl;
-    cout << "#buffer_num:\t" << BUFFER_NUM << endl;
-    cout << "#buffer_size:\t" << BUFFER_SIZE << endl;
-}
-
-
-uint64_t total_commit_counts_ = 0;
-uint64_t total_abort_counts_ = 0;
-uint64_t tocal_abort_res_counts_[4] = {0};
-
-void displayResult() {
-    for (int i = 0; i < THREAD_NUM; i++) {
-#if SHOW_DETAILS
-        cout << 
-        "thread#" << i << 
-        "\tcommit: " << SiloResult[i].local_commit_counts_ << 
-        "\tabort:" << SiloResult[i].local_abort_counts_ << 
-        "\tabort_VP1: " << SiloResult[i].local_abort_res_counts_[0] <<  // aborted by validation phase 1
-        "\tabort_VP2: " << SiloResult[i].local_abort_res_counts_[1] <<  // aborted by validation phase 2
-        "\tabort_VP3: " << SiloResult[i].local_abort_res_counts_[2] <<  // aborted by validation phase 3
-        "\tabort_bNULL: " << SiloResult[i].local_abort_res_counts_[3] <<// aborted by NULL current buffer    
-        endl;
-#endif
-        total_commit_counts_ += SiloResult[i].local_commit_counts_;
-        total_abort_counts_ += SiloResult[i].local_abort_counts_;
-        tocal_abort_res_counts_[0] += SiloResult[i].local_abort_res_counts_[0];
-        tocal_abort_res_counts_[1] += SiloResult[i].local_abort_res_counts_[1];
-        tocal_abort_res_counts_[2] += SiloResult[i].local_abort_res_counts_[2];
-        tocal_abort_res_counts_[3] += SiloResult[i].local_abort_res_counts_[3];
-
-    }
-#if SHOW_DETAILS
-    cout << "[info]\tcommit_counts_:\t" << total_commit_counts_ << endl;
-    cout << "[info]\tabort_counts_:\t" << total_abort_counts_ << endl;
-    cout << "[info]\t-abort_validation1:\t" << tocal_abort_res_counts_[0] << endl;
-    cout << "[info]\t-abort_validation2:\t" << tocal_abort_res_counts_[1] << endl;
-    cout << "[info]\t-abort_validation3:\t" << tocal_abort_res_counts_[2] << endl;
-    cout << "[info]\t-abort_NULLbuffer:\t" << tocal_abort_res_counts_[3] << endl;
-
-    cout << "[info]\tabort_rate:\t" << (double)total_abort_counts_ / (double)(total_commit_counts_ + total_abort_counts_) << endl;
-
-    uint64_t result = total_commit_counts_ / EXTIME;
-    cout << "[info]\tlatency[ns]:\t" << powl(10.0, 9.0) / result * THREAD_NUM << endl;
-    cout << "[info]\tthroughput[tps]:\t" << result << endl;
-#endif
 }
 
 void create_logfiles(int logger_num) {
@@ -365,8 +254,6 @@ int SGX_CDECL main() {
 
     chrono::system_clock::time_point p1, p2, p3, p4, p5, p6;
 #if SHOW_DETAILS
-    std::cout << "esilo: Silo_logging running within Enclave" << std::endl;
-    std::cout << "ported from silo_minimum" << std::endl;
     displayParameter();
 #endif
     p1 = chrono::system_clock::now();
@@ -424,21 +311,31 @@ int SGX_CDECL main() {
 
     uint64_t ret_durableEpoch = 0;
     ecall_showDurableEpoch(global_eid, &ret_durableEpoch);
-    displayResult();
+
+    for (int i = 0; i < THREAD_NUM; i++) {
+        SiloResult[0].addLocalAllResult(SiloResult[i]);
 #if SHOW_DETAILS
-    std::cout << "[info]\tcreateEnclave:\t" << duration1/1000 << "s.\n";
-    std::cout << "[info]\tmakeDB:\t\t" << duration2/1000 << "s.\n";
-    std::cout << "[info]\tcreateThread:\t" << duration3/1000 << "s.\n";
-    std::cout << "[info]\texecutionTime:\t" << duration4/1000 << "s.\n";
-    std::cout << "[info]\tdestroyThread:\t" << duration5/1000 << "s.\n";
-    std::cout << "[info]\tocall_count(write):\t" << ocall_count.load() << std::endl;
-    std::cout << "[info]\tdurableEpoch:\t" << ret_durableEpoch << std::endl;
+        SiloResult[i].displayLocalDetailResult(i);
 #endif
+    }
+    
+#if SHOW_DETAILS
+    SiloResult[0].displayAllResult();
+    SiloResult[0].displayDetailResult();
+#endif
+
+    // std::cout << "[info]\tmakeDB:\t" << duration1/1000 << "s.\n";
+    // std::cout << "[info]\tcreateThread:\t" << duration2/1000 << "s.\n";
+    // std::cout << "[info]\texecutionTime:\t" << duration3/1000 << "s.\n";
+    // std::cout << "[info]\tdestroyThread:\t" << duration4/1000 << "s.\n";
+    // std::cout << "[info]\tcall_count(write):\t" << ocall_count.load() << std::endl;
+    // std::cout << "[info]\tdurableEpoch:\t" << ret_durableEpoch << std::endl;
+
     std::cout << "=== for copy&paste ===" << std::endl;
-    std::cout << total_commit_counts_ << std::endl;
-    std::cout << total_abort_counts_ << std::endl;
-    std::cout << (double)total_abort_counts_ / (double)(total_commit_counts_ + total_abort_counts_) << std::endl;
-    uint64_t result = total_commit_counts_ / EXTIME;
+    std::cout << SiloResult[0].total_commit_counts_ << std::endl;
+    std::cout << SiloResult[0].total_abort_counts_ << std::endl;
+    std::cout << (double)SiloResult[0].total_abort_counts_ / (double)(SiloResult[0].total_commit_counts_ + SiloResult[0].total_abort_counts_) << std::endl;
+    uint64_t result = SiloResult[0].total_commit_counts_ / EXTIME;
     std::cout << powl(10.0, 9.0) / result * THREAD_NUM << std::endl;;  // latency
     std::cout << ret_durableEpoch << std::endl;
     std::cout << result << std::endl;; // throughput

@@ -55,6 +55,5 @@ class Logger {
         void wait_deq();
         void worker_end(int thid);
         void logger_end();
-
         void show_result();
 };

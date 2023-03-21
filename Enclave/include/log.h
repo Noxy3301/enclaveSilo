@@ -24,27 +24,52 @@ class LogHeader {
 };
 
 class LogRecord {
-    public:
-        uint64_t tid_;
-        uint32_t key_;
-        uint32_t val_;
+public:
+    uint64_t tid_;
+    std::string_view key_;
+    char val_[VAL_SIZE];
 
-        LogRecord() : tid_(0), key_(0) {}
-        LogRecord(uint64_t tid, uint32_t key, uint32_t val) : tid_(tid), key_(key) {
-            this->val_ = val;
+    LogRecord() : tid_(0), key_("") {}
+
+    LogRecord(uint64_t tid, std::string_view key, char *val) : tid_(tid), key_(key) {
+        memcpy(this->val_, val, VAL_SIZE);
+    }
+
+    int computeChkSum() {
+        // compute checksum
+        int chkSum = 0;
+        int *itr = (int *) this;
+        for (unsigned int i = 0; i < sizeof(LogRecord) / sizeof(int); ++i) {
+            chkSum += (*itr);
+            ++itr;
         }
 
-        int computeChkSum() {
-            // compute check_sum
-            int chkSum = 0;
-            int *itr = (int*) this;
-            for (uint32_t i = 0; i < sizeof(LogRecord) / sizeof(int); i++) {
-                chkSum += (*itr);
-                itr++;
-            }
-            return chkSum;
-        }
+        return chkSum;
+    }
 };
+
+// class LogRecord {
+//     public:
+//         uint64_t tid_;
+//         uint64_t key_;
+//         uint32_t val_;
+
+//         LogRecord() : tid_(0), key_(0) {}
+//         LogRecord(uint64_t tid, uint32_t key, uint32_t val) : tid_(tid), key_(key) {
+//             this->val_ = val;
+//         }
+
+//         int computeChkSum() {
+//             // compute check_sum
+//             int chkSum = 0;
+//             int *itr = (int*) this;
+//             for (uint32_t i = 0; i < sizeof(LogRecord) / sizeof(int); i++) {
+//                 chkSum += (*itr);
+//                 itr++;
+//             }
+//             return chkSum;
+//         }
+// };
 
 class LogPackage {
     public:

@@ -70,7 +70,7 @@ std::uint64_t Logger::find_min_epoch() {
             min_ctid = ctid;
         }
     }
-    TIDword tid;
+    Tidword tid;
     tid.obj_ = min_ctid;
     std::uint64_t min_epoch = tid.epoch;
     // check
