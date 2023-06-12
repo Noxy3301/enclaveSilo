@@ -251,6 +251,11 @@ int ocall_save_pepochfile(const uint8_t* sealed_data, const size_t sealed_size) 
 
 /* Application entry */
 int SGX_CDECL main() {
+#if BENCHMARK == 0
+    std::cout << "TPC-C-NP Silo benchmark" << std::endl;
+#elif BENCHMARK == 1
+    std::cout << "YCSB Silo benchmark" << std::endl;
+#endif
 
     chrono::system_clock::time_point p1, p2, p3, p4, p5, p6;
 #if SHOW_DETAILS

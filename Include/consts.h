@@ -41,7 +41,7 @@
 // Benchmark pattern
 // 0: Use TPC-C-NP benchmark. wip
 // 1: Use YCSB benchmark.
-#define BENCHMARK 1
+#define BENCHMARK 0
 
 // TPC-C-NP settings
 #define TPCC_NUM_WH 1            // The number of warehouses

@@ -127,10 +127,10 @@ class YcsbWorkload {
         return;
     }
 
-    template <typename Tuple, typename Param>
-    static void partTableInit([[maybe_unused]] size_t thid, Param *p,
-                              uint64_t start, uint64_t end) {
-        for (auto i = start; i <= end; ++i) {
+    static uint32_t getTableNum() { return (uint32_t)Storage::Size; }
+
+    template <typename Tuple, typename Param> static void makeDB(Param *p) {
+        for (auto i = 0; i <= TUPLE_NUM; ++i) {
             SimpleKey<8> key;
             YCSB::CreateKey(i, key.ptr());
             HeapObject obj;
@@ -138,28 +138,9 @@ class YcsbWorkload {
             YCSB& ycsb_tuple = obj.ref();
             ycsb_tuple.id_ = i;
             Tuple* tmp = new Tuple();
-            tmp->init(thid, TupleBody(key.view(), std::move(obj)), p);
+            tmp->init(0, TupleBody(key.view(), std::move(obj)), p);
             Table[get_storage(Storage::YCSB)].put(key.view(), tmp, 1);
         }
-    }
-
-    static uint32_t getTableNum() { return (uint32_t)Storage::Size; }
-
-    template <typename Tuple, typename Param> static void makeDB(Param *p) {
-        //   size_t maxthread = decideParallelBuildNumber(TUPLE_NUM);
-        size_t maxthread = 1;
-
-        // std::vector<std::thread> thv;
-        // for (size_t i = 0; i < maxthread; ++i)
-        //     thv.emplace_back(partTableInit<Tuple, Param>, i, p,
-        //                      i * (TUPLE_NUM / maxthread),
-        //                      (i + 1) * (TUPLE_NUM / maxthread) - 1);
-        // for (auto &th : thv)
-        //     th.join();
-
-        // NOTE: Enclaveでthreadは使えないのでシングルスレッドでやる
-        int i = maxthread;  // loop処理用だけど書き換えると分からなくなりそうなので
-        partTableInit<Tuple, Param>(i, p, i * (TUPLE_NUM / maxthread), (i + 1) * (TUPLE_NUM / maxthread) - 1);
     }
 
     // static void displayWorkloadParameter() {

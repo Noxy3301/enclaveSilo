@@ -508,8 +508,9 @@ template <typename Tuple, typename Param> class TPCCInitializaer {
     static void load(Param *param) {
         // ID 1-origin
 
-        std::vector<std::thread> thv;
-        std::cout << "[start] load." << std::endl;
+        // std::vector<std::thread> thv;
+        // std::cout << "[start] load." << std::endl;
+        printf("[start] load.\n");
 
         // DEBUG: スレッド立てて並列処理しているけど中身が理解できないから逐次的に処理して確認する
         // thv.emplace_back(load_item, param);
@@ -528,9 +529,10 @@ template <typename Tuple, typename Param> class TPCCInitializaer {
         }
 
 
-        for (auto &&th : thv) {
-            th.join();
-        }
-        std::cout << "[end] load." << std::endl;
+        // for (auto &&th : thv) {
+        //     th.join();
+        // }
+        // std::cout << "[end] load." << std::endl;
+        printf("[end] load.\n");
     }
 };

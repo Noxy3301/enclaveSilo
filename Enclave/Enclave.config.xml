@@ -2,7 +2,7 @@
   <ProdID>0</ProdID>
   <ISVSVN>0</ISVSVN>
   <StackMaxSize>0x40000</StackMaxSize>
-  <HeapMaxSize>0x400000000</HeapMaxSize> <!-- 16GB -->
+  <HeapMaxSize>0x200000000</HeapMaxSize> <!-- 8GB -->
   <HeapMinSize>0x100000000</HeapMinSize> <!-- 4GB -->
   <TCSNum>20</TCSNum>
   <TCSPolicy>1</TCSPolicy>
