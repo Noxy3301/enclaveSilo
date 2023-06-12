@@ -5,7 +5,6 @@
 #include <thread>
 #include <mutex>
 #include <condition_variable>
-#include <string>
 
 #include "common.h"
 #include "tsc.h"    // start_clock_記録するように使ってる

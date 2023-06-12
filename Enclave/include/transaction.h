@@ -12,6 +12,10 @@
 #include "workload.hh"
 #include "tuple.h"
 
+#if BENCHMARK == 0
+#include "tpcc/tpcc_tables.hh"
+#endif
+
 enum class TransactionStatus : uint8_t {
     invalid,
     inFlight,
@@ -32,7 +36,7 @@ class TxExecutor {
         
         // transaction status 
         TransactionStatus status_;
-        unsigned int thid_;
+        size_t thid_;
         Result *result_;
         uint64_t epoch_timer_start, epoch_timer_stop;
         const bool& quit_; // for thread termination control
@@ -64,29 +68,28 @@ class TxExecutor {
             max_wset_.obj_ = 0;
         }
 
+        void abort();
         void begin();
-
-        Status read(Storage s, std::string key);
-        Status read_internal(Storage s, std::string key, Tuple* tuple);
-        Status write(Storage s, std::string key);
-
-        ReadElement<Tuple> *searchReadSet(Storage s, std::string key);
-        WriteElement<Tuple> *searchWriteSet(Storage s, std::string key);
-
+        // void tx_delete(std::uint64_t key); // TODO: implementation
+        Tuple *get_tuple(Tuple *table, std::uint64_t key) { return &table[key]; }
+        Status insert(Storage s, std::string_view key, TupleBody&& body);
+        void lockWriteSet();
+        Status read(Storage s, std::string_view key, TupleBody** body);
+        Status read_internal(Storage s, std::string_view key, Tuple* tuple);
+        // Status scan(Storage s, std::string_view left_key, bool l_exclusive, std::string_view right_key, bool r_exclusive, std::vector<TupleBody *>&result);  // TODO: implementation
+        ReadElement<Tuple> *searchReadSet(Storage s, std::string_view key);
+        WriteElement<Tuple> *searchWriteSet(Storage s, std::string_view key);
         void unlockWriteSet();
         void unlockWriteSet(std::vector<WriteElement<Tuple>>::iterator end);
-        void lockWriteSet();
-
         bool validationPhase();
-        void writePhase();
-        void abort();
-    
         void wal(std::uint64_t ctid);
-        bool pauseCondition();
-        void epochWork(uint64_t &epoch_timer_start, uint64_t &epoch_timer_stop);
-        void durableEpochWork(uint64_t &epoch_timer_start, uint64_t &epoch_timer_stop, const bool &quit);
-
+        Status write(Storage s, std::string_view key, TupleBody&& body);
+        void writePhase();
         bool commit();
         bool isLeader();
         void leaderWork();
+
+        bool pauseCondition();
+        void epochWork(uint64_t &epoch_timer_start, uint64_t &epoch_timer_stop);
+        void durableEpochWork(uint64_t &epoch_timer_start, uint64_t &epoch_timer_stop, const bool &quit);
 };

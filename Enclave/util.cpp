@@ -42,6 +42,24 @@ void FisherYates(std::vector<int>& v){
 }
 
 void ecall_initDB() {
+    std::string str = "[info]\t Initializing table ";   // DEBUG: atode kesu
+    // std::cout << str << "\r" << std::flush;   // DEBUG: atode kesu
+    printf("%s\r", str.c_str());
+    for (int i = 0; i < 10; i++) {
+#if BENCHMARK == 0
+        // Table[i].init(1000);
+        // Table[i].init(MAX_ITEMS*2);
+        Table[i].init(TUPLE_NUM*2);
+#elif BENCHMARK == 1
+        Table[i].init(TUPLE_NUM*2);
+#endif
+        str = str + ".";
+        // std::cout << str << "\r" << std::flush;
+        printf("%s\r", str.c_str());
+    }
+    // std::cout << std::endl;
+    // std::cout << "[info]\t Table initialization completed" << std::endl;    // DEBUG: atode kesu
+    printf("[info]\t Table initialization completed");
 
 #if BENCHMARK == 0
     TPCCWorkload<Tuple,void>::makeDB(nullptr);

@@ -2,6 +2,8 @@
 
 #include <cstdint>
 
+#define MAX_TX_TYPE 10
+
 class Result {
     public:
         uint64_t local_abort_counts_ = 0;
@@ -10,6 +12,8 @@ class Result {
         uint64_t local_abort_by_validation2_ = 0;
         uint64_t local_abort_by_validation3_ = 0;
         uint64_t local_abort_by_null_buffer_ = 0;
+        uint64_t local_commit_counts_per_tx_[MAX_TX_TYPE] = {0};
+        uint64_t local_abort_counts_per_tx_[MAX_TX_TYPE] = {0};
 
 
         uint64_t total_abort_counts_ = 0;
@@ -18,6 +22,8 @@ class Result {
         uint64_t total_abort_by_validation2_ = 0;
         uint64_t total_abort_by_validation3_ = 0;
         uint64_t total_abort_by_null_buffer_ = 0;
+        uint64_t total_commit_counts_per_tx_[MAX_TX_TYPE] = {0};
+        uint64_t total_abort_counts_per_tx_[MAX_TX_TYPE] = {0};
 
 
         void displayAbortCounts();

@@ -27,6 +27,16 @@ inline static void waitTime_ns(const uint64_t time) {
     }
 }
 
+// common/util.ccのsleepMsをTPCCで使うけど、this_thread::sleep_forは使えないから代用
+inline static void sleepMs(size_t ms) {
+    uint64_t start = rdtscp();
+    uint64_t end = 0;
+    for (;;) {
+        end = rdtscp();
+        if (end - start > ms * CLOCKS_PER_US * 1000) break;   // CHECK: これあっている？
+    }
+}
+
 template<typename Int>
 Int byteswap(Int in) {
   switch (sizeof(Int)) {

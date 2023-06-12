@@ -2,6 +2,8 @@
 
 #include <map>
 
+#include "tuple.h"
+
 enum class Storage : std::uint32_t;
 inline uint32_t get_storage(Storage s) {
   return static_cast<std::uint32_t>(s);
@@ -45,3 +47,11 @@ struct SimpleKey {
 
 // #define MAX_TABLES 10
 // alignas(CACHE_LINE_SIZE) GLOBAL MasstreeWrapper<Tuple> Masstrees[MAX_TABLES];
+
+#if INDEX_PATTERN == 0
+extern std::vector<OptCuckoo<Tuple>> Table;
+#elif INDEX_PATTERN == 1
+extern LinearIndex<Tuple*> Table;
+#else
+// Masstree Table
+#endif

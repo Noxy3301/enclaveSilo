@@ -53,11 +53,16 @@
 #include "include/zipf.h"
 
 #include "OCH.h"
-// #include "include/tpcc.h"
+
+#if BENCHMARK == 0
+#include "include/tpcc.h"
+#elif BENCHMARK == 1
 #include "include/ycsb.h"
+#endif
 
 #if INDEX_PATTERN == 0
-OptCuckoo<Tuple*> Table(TUPLE_NUM*2);
+#define MAX_TABLES 10
+std::vector<OptCuckoo<Tuple>> Table(MAX_TABLES);
 #elif INDEX_PATTERN == 1
 LinearIndex<Tuple*> Table;
 #else
@@ -123,7 +128,8 @@ void ecall_worker_th(int thid, int gid) {
     logger->add_tx_executor(trans);
 
 #if BENCHMARK == 0  // TPC-C-NP benchmark
-    TPCCWorkload workload;
+    TPCCWorkload<Tuple,void> workload;
+    workload.prepare(trans, nullptr);
 #elif BENCHMARK == 1    // YCSB benchmark
     YcsbWorkload workload;
 #endif
