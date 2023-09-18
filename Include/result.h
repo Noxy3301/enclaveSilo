@@ -2,41 +2,28 @@
 
 #include <cstdint>
 
-#define MAX_TX_TYPE 10
-
 class Result {
     public:
         uint64_t local_abort_counts_ = 0;
         uint64_t local_commit_counts_ = 0;
-        uint64_t local_abort_by_validation1_ = 0;
-        uint64_t local_abort_by_validation2_ = 0;
-        uint64_t local_abort_by_validation3_ = 0;
-        uint64_t local_abort_by_null_buffer_ = 0;
-        uint64_t local_commit_counts_per_tx_[MAX_TX_TYPE] = {0};
-        uint64_t local_abort_counts_per_tx_[MAX_TX_TYPE] = {0};
-
-
         uint64_t total_abort_counts_ = 0;
         uint64_t total_commit_counts_ = 0;
-        uint64_t total_abort_by_validation1_ = 0;
-        uint64_t total_abort_by_validation2_ = 0;
-        uint64_t total_abort_by_validation3_ = 0;
-        uint64_t total_abort_by_null_buffer_ = 0;
-        uint64_t total_commit_counts_per_tx_[MAX_TX_TYPE] = {0};
-        uint64_t total_abort_counts_per_tx_[MAX_TX_TYPE] = {0};
 
+        uint64_t local_abort_res_counts_[4] = {0};
+};
 
-        void displayAbortCounts();
-        void displayCommitCounts();
-        void displayAllResult();
+class ResultLog {
+    public:
+        Result result_;
+        uint64_t local_bkpr_latency_ = 0;
+        uint64_t local_txn_latency_ = 0;
+        uint64_t local_wait_depoch_latency_ = 0;
+        uint64_t local_publish_latency_ = 0;
+        uint64_t local_publish_counts_ = 0;
 
-        void displayLocalDetailResult(const int thid);
-        void displayDetailResult();
-
-        void addLocalAbortCounts(const uint64_t count);
-        void addLocalCommitCounts(const uint64_t count);
-
-        void addLocalAbortDetailCounts(const Result &other);
-
-        void addLocalAllResult(const Result &other);
+        uint64_t total_bkpr_latency_ = 0;
+        uint64_t total_txn_latency_ = 0;
+        uint64_t total_wait_depoch_latency_ = 0;
+        uint64_t total_publish_latency_ = 0;
+        uint64_t total_publish_counts_ = 0;
 };

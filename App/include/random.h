@@ -7,19 +7,21 @@
  */
 
 #include <stdint.h>
+#include <random>
 
 #pragma once
 
 class Xoroshiro128Plus {
     public:
-        Xoroshiro128Plus(unsigned init_rnd) {
-            init(init_rnd);
+        Xoroshiro128Plus() {
+            init();
         }
 
         uint64_t s[2];
 
-        inline void init(unsigned init_rnd) {
-            s[0] = init_rnd;
+        inline void init() {
+            std::random_device rnd;
+            s[0] = rnd();
             s[1] = splitMix64(s[0]);
         }
 

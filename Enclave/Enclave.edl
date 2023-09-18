@@ -51,7 +51,9 @@ enclave {
         public void ecall_waitForReady();
         public void ecall_sendStart();
         public void ecall_sendQuit();
-        public uint64_t ecall_getResult(int thid, int datatype);
+        public uint64_t ecall_getAbortResult(int thid);
+        public uint64_t ecall_getCommitResult(int thid);
+        public uint64_t ecall_getAbortResResult(int thid, int res);
         public void ecall_showLoggerResult(int thid);
         public uint64_t ecall_showDurableEpoch();
     };

@@ -8,44 +8,34 @@
 #include "notifier.h"
 
 #include "../../Include/result.h"
-#include "status.hh"
-#include "workload.hh"
-#include "tuple.h"
-
-#if BENCHMARK == 0
-#include "tpcc/tpcc_tables.hh"
-#endif
 
 enum class TransactionStatus : uint8_t {
-    invalid,
-    inFlight,
-    committed,
-    aborted,
+    InFlight,
+    Committed,
+    Aborted,
 };
 
 class TxExecutor {
     public:
-        // operation sets
-        std::vector<ReadElement<Tuple>> read_set_;
-        std::vector<WriteElement<Tuple>> write_set_;
+        std::vector<ReadElement> read_set_;
+        std::vector<WriteElement> write_set_;
         std::vector<Procedure> pro_set_;
-        
-        // for logging
+
         std::vector<LogRecord> log_set_;
         LogHeader latest_log_header_;
-        
-        // transaction status 
-        TransactionStatus status_;
-        size_t thid_;
-        Result *result_;
-        uint64_t epoch_timer_start, epoch_timer_stop;
-        const bool& quit_; // for thread termination control
-        
-        // for calcurate TID
-        Tidword mrctid_;
-        Tidword max_rset_, max_wset_;
 
-        // for logging
+        Result *sres_;
+
+        TransactionStatus status_;
+        unsigned int thid_;
+        TIDword mrctid_;
+        TIDword max_rset_, max_wset_;
+
+        uint64_t write_val_;
+        uint64_t return_val_;
+
+        // TxExecutorLog
+        ResultLog *sres_lg_;
         LogBufferPool log_buffer_pool_;
         NotificationId nid_;
         std::uint32_t nid_counter_ = 0; // Notification ID
@@ -59,37 +49,24 @@ class TxExecutor {
         // 4 : Aborted by failure to set current buffer 
         int abort_res_ = 0;
 
-        TxExecutor(int thid, Result *res, const bool &quit) : thid_(thid), result_(res), quit_(quit) {
-            read_set_.reserve(MAX_OPE);
-            write_set_.reserve(MAX_OPE);
-            pro_set_.reserve(MAX_OPE);
+        TxExecutor(int thid);
 
-            max_rset_.obj_ = 0;
-            max_wset_.obj_ = 0;
-        }
-
-        void abort();
         void begin();
-        // void tx_delete(std::uint64_t key); // TODO: implementation
-        Tuple *get_tuple(Tuple *table, std::uint64_t key) { return &table[key]; }
-        Status insert(Storage s, std::string_view key, TupleBody&& body);
-        void lockWriteSet();
-        Status read(Storage s, std::string_view key, TupleBody** body);
-        Status read_internal(Storage s, std::string_view key, Tuple* tuple);
-        // Status scan(Storage s, std::string_view left_key, bool l_exclusive, std::string_view right_key, bool r_exclusive, std::vector<TupleBody *>&result);  // TODO: implementation
-        ReadElement<Tuple> *searchReadSet(Storage s, std::string_view key);
-        WriteElement<Tuple> *searchWriteSet(Storage s, std::string_view key);
+        void read(uint64_t key);
+        void write(uint64_t key, uint64_t val = 0);
+        ReadElement *searchReadSet(uint64_t key);
+        WriteElement *searchWriteSet(uint64_t key);
         void unlockWriteSet();
-        void unlockWriteSet(std::vector<WriteElement<Tuple>>::iterator end);
+        void unlockWriteSet(std::vector<WriteElement>::iterator end);
+        void lockWriteSet();
         bool validationPhase();
-        void wal(std::uint64_t ctid);
-        Status write(Storage s, std::string_view key, TupleBody&& body);
+        // TODO void wal(std::uint64_t ctid);
         void writePhase();
-        bool commit();
-        bool isLeader();
-        void leaderWork();
-
+        void abort();
+    
+        void wal(std::uint64_t ctid);
         bool pauseCondition();
         void epochWork(uint64_t &epoch_timer_start, uint64_t &epoch_timer_stop);
         void durableEpochWork(uint64_t &epoch_timer_start, uint64_t &epoch_timer_stop, const bool &quit);
+
 };

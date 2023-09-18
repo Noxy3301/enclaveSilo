@@ -3,14 +3,6 @@
 #include "Enclave_t.h"
 #include "sgx_thread.h"
 
-#include "include/util.h"
-
-#if BENCHMARK == 0
-#include "include/tpcc.h"
-#elif BENCHMARK == 1
-#include "include/ycsb.h"
-#endif
-
 bool chkEpochLoaded() {
     uint64_t nowepo = atomicLoadGE();
     // leader_workを実行しているのはthid:0だからforは1から回している？
@@ -20,75 +12,27 @@ bool chkEpochLoaded() {
     return true;
 }
 
-// void leaderWork(uint64_t &epoch_timer_start, uint64_t &epoch_timer_stop) {
-//     epoch_timer_stop = rdtscp();
-//     if (chkClkSpan(epoch_timer_start, epoch_timer_stop, EPOCH_TIME * CLOCKS_PER_US * 1000) && chkEpochLoaded()) {
-//         atomicAddGE();
-//         epoch_timer_start = epoch_timer_stop;
-//     }
-// }
-
-void siloLeaderWork(uint64_t &epoch_timer_start, uint64_t &epoch_timer_stop) {
+void leaderWork(uint64_t &epoch_timer_start, uint64_t &epoch_timer_stop) {
     epoch_timer_stop = rdtscp();
     if (chkClkSpan(epoch_timer_start, epoch_timer_stop, EPOCH_TIME * CLOCKS_PER_US * 1000) && chkEpochLoaded()) {
-    atomicAddGE();
-    epoch_timer_start = epoch_timer_stop;
+        atomicAddGE();
+        epoch_timer_start = epoch_timer_stop;
     }
 }
 
-std::mt19937 mt{std::random_device{}()};
-void FisherYates(std::vector<int>& v){
-    int n = v.size();
-    for(int i = n-1; i >= 0; i --){
-        std::uniform_int_distribution<int> dist(0, i);
-        int j = dist(mt);
-        std::swap(v[i], v[j]);
+void makeProcedure(std::vector<Procedure> &pro, Xoroshiro128Plus &rnd) {
+    pro.clear();
+    for (int i = 0; i < MAX_OPE; i++) {
+        uint64_t tmpkey, tmpope;
+        tmpkey = rnd.next() % TUPLE_NUM;
+        if ((rnd.next() % 100) < RRAITO) {
+            pro.emplace_back(Ope::READ, tmpkey);
+        } else {
+            pro.emplace_back(Ope::WRITE, tmpkey);
+        }
     }
 }
 
-void ecall_initDB() {
-    std::string str = "[info]\t Initializing table ";   // DEBUG: atode kesu
-    // std::cout << str << "\r" << std::flush;   // DEBUG: atode kesu
-    printf("[info]\t Initializing table \n");
-    for (int i = 0; i < 10; i++) {
-#if BENCHMARK == 0
-        Table[i].init(TUPLE_NUM*2);
-#elif BENCHMARK == 1
-        Table[i].init(TUPLE_NUM*2);
-#endif
-        str = str + ".";
-        // printf("\r.\n");
-    }
-    // std::cout << std::endl;
-    // std::cout << "[info]\t Table initialization completed" << std::endl;    // DEBUG: atode kesu
-    printf("[info]\t Table initialization completed\n");
-
-#if BENCHMARK == 0
-    TPCCWorkload<Tuple,void>::makeDB(nullptr);
-#elif BENCHMARK == 1
-    YcsbWorkload::makeDB<Tuple,void>(nullptr);
-#endif
-
-    for (int i = 0; i < THREAD_NUM; i++) {
-        ThLocalEpoch[i] = 0;
-        CTIDW[i] = ~(uint64_t)0;
-    }
-
-    for (int i = 0; i < LOGGER_NUM; i++) {
-        ThLocalDurableEpoch[i] = 0;
-    }
-    DurableEpoch = 0;
+bool unchi() {
+    int unchiburi = 0;
 }
-
-// void makeProcedure(std::vector<Procedure> &pro, Xoroshiro128Plus &rnd) {
-//     pro.clear();
-//     for (int i = 0; i < MAX_OPE; i++) {
-//         uint64_t tmpkey, tmpope;
-//         tmpkey = rnd.next() % TUPLE_NUM;
-//         if ((rnd.next() % 100) < RRAITO) {
-//             pro.emplace_back(Ope::READ, tmpkey);
-//         } else {
-//             pro.emplace_back(Ope::WRITE, tmpkey);
-//         }
-//     }
-// }

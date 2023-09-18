@@ -52,28 +52,20 @@
 #include "include/util.h"
 #include "include/zipf.h"
 
-#include "OCH.h"
+#include "include/debug.h"
+#include "OCH.cpp"
 
-#if BENCHMARK == 0
-#include "include/tpcc.h"
-#elif BENCHMARK == 1
-#include "include/ycsb.h"
-#endif
-
-#if INDEX_PATTERN == 0
-#define MAX_TABLES 10
-std::vector<OptCuckoo<Tuple>> Table(MAX_TABLES);
-#elif INDEX_PATTERN == 1
-LinearIndex<Tuple*> Table;
+#if INDEX_PATTERN == 2
+OptCuckoo<Tuple*> Table(TUPLE_NUM*2);
 #else
-// Masstree Table
+std::vector<Tuple> Table(TUPLE_NUM);
 #endif
 std::vector<uint64_t> ThLocalEpoch(THREAD_NUM);
 std::vector<uint64_t> CTIDW(THREAD_NUM);
 std::vector<uint64_t> ThLocalDurableEpoch(LOGGER_NUM);
 uint64_t DurableEpoch;
 uint64_t GlobalEpoch = 1;
-std::vector<Result> results(THREAD_NUM);
+std::vector<returnResult> results(THREAD_NUM);
 std::atomic<Logger *> logs[LOGGER_NUM];
 Notifier notifier;
 std::vector<int> readys(THREAD_NUM);
@@ -81,6 +73,53 @@ std::vector<int> readys(THREAD_NUM);
 bool start = false;
 bool quit = false;
 
+std::mt19937 mt{std::random_device{}()};
+void FisherYates(std::vector<int>& v){
+    int n = v.size();
+    for(int i = n-1; i >= 0; i --){
+        std::uniform_int_distribution<int> dist(0, i);
+        int j = dist(mt);
+        std::swap(v[i], v[j]);
+    }
+}
+
+void ecall_initDB() {
+    std::vector<int> random_array;
+    for (int i = 0; i < TUPLE_NUM; i++) {
+        random_array.push_back(i);
+    }
+    if (INDEX_PATTERN == 1) {
+        FisherYates(random_array);
+    }
+    
+    // init Table
+    for (int i = 0; i < TUPLE_NUM; i++) {
+#if INDEX_PATTERN == 2
+        Tuple *tmp=new Tuple();
+#else
+        Tuple *tmp;
+        tmp = &Table[i];
+#endif
+        tmp->tidword_.epoch = 1;
+        tmp->tidword_.latest = 1;
+        tmp->tidword_.lock = 0;
+        tmp->key_ = random_array[i];
+        tmp->val_ = 0;
+#if INDEX_PATTERN == 2
+        Table.put(i,tmp,0);
+#endif
+    }
+
+    for (int i = 0; i < THREAD_NUM; i++) {
+        ThLocalEpoch[i] = 0;
+        CTIDW[i] = ~(uint64_t)0;
+    }
+
+    for (int i = 0; i < LOGGER_NUM; i++) {
+        ThLocalDurableEpoch[i] = 0;
+    }
+    DurableEpoch = 0;
+}
 
 // MARK: enclave function
 
@@ -110,12 +149,13 @@ void ecall_sendQuit() {
 
 
 void ecall_worker_th(int thid, int gid) {
-    Result &myres = std::ref(results[thid]);
-    TxExecutor trans(thid, (Result *) &myres, std::ref(quit));
+    TxExecutor trans(thid);
+    returnResult &myres = std::ref(results[thid]);
+    uint64_t epoch_timer_start, epoch_timer_stop;
     
-    // unsigned init_seed;
-    // sgx_read_rand((unsigned char *) &init_seed, 4);
-    // Xoroshiro128Plus rnd(init_seed);
+    unsigned init_seed;
+    sgx_read_rand((unsigned char *) &init_seed, 4);
+    Xoroshiro128Plus rnd(init_seed);
 
     Logger *logger;
     std::atomic<Logger*> *logp = &(logs[gid]);  // loggerのthreadIDを指定したいからgidを使う
@@ -127,25 +167,55 @@ void ecall_worker_th(int thid, int gid) {
     }
     logger->add_tx_executor(trans);
 
-#if BENCHMARK == 0  // TPC-C-NP benchmark
-    TPCCWorkload<Tuple,void> workload;
-    workload.prepare(trans, nullptr);
-#elif BENCHMARK == 1    // YCSB benchmark
-    YcsbWorkload workload;
-#endif
+    __atomic_store_n(&readys[thid], 1, __ATOMIC_RELEASE);
 
-    // Wait for other thread's ready
-    storeRelease(readys[thid], 1);
-    while (!loadAcquire(start)) continue;
-
-    // Execute transaction while quit == false
-    if (thid == 0) trans.epoch_timer_start = rdtscp();
-    while (!loadAcquire(quit)) {
-        workload.run<TxExecutor,TransactionStatus>(trans);
+    while (true) {
+        if (__atomic_load_n(&start, __ATOMIC_ACQUIRE)) break;
     }
-    // terminate logger
+
+    if (thid == 0) epoch_timer_start = rdtscp();
+
+    while (true) {
+        if (__atomic_load_n(&quit, __ATOMIC_ACQUIRE)) break;
+        
+        makeProcedure(trans.pro_set_, rnd); // ocallで生成したprocedureをTxExecutorに移し替える
+
+    RETRY:
+
+        if (thid == 0) leaderWork(epoch_timer_start, epoch_timer_stop);
+        trans.durableEpochWork(epoch_timer_start, epoch_timer_stop, quit);
+        
+        if (__atomic_load_n(&quit, __ATOMIC_ACQUIRE)) break;
+
+        trans.begin();
+        for (auto itr = trans.pro_set_.begin(); itr != trans.pro_set_.end(); itr++) {
+            if ((*itr).ope_ == Ope::READ) {
+                trans.read((*itr).key_);
+            } else if ((*itr).ope_ == Ope::WRITE) {
+                trans.write((*itr).key_);
+            } else {
+                // ERR;
+                // DEBUG
+                printf("おい！なんか変だぞ！\n");
+                return;
+            }
+        }
+   
+        if (trans.validationPhase()) {
+            trans.writePhase();
+            storeRelease(myres.local_commit_counts_, loadAcquire(myres.local_commit_counts_) + 1);
+        } else {
+            trans.abort();
+            assert(trans.abort_res_ != 0);
+            myres.local_abort_res_counts_[trans.abort_res_ - 1]++;
+            myres.local_abort_counts_++;
+            goto RETRY;
+        }
+    }
+
     trans.log_buffer_pool_.terminate();
     logger->worker_end(thid);
+
     return;
 }
 
@@ -158,40 +228,23 @@ void ecall_logger_th(int thid) {
     return;
 }
 
+uint64_t ecall_getAbortResult(int thid) {
+    return results[thid].local_abort_counts_;
+}
+
+uint64_t ecall_getCommitResult(int thid) {
+    return results[thid].local_commit_counts_;
+}
+
+uint64_t ecall_getAbortResResult(int thid, int res) {
+    return results[thid].local_abort_res_counts_[res];
+}
+
 void ecall_showLoggerResult(int thid) {
     Logger *logger;
     std::atomic<Logger*> *logp = &(logs[thid]);
     logger = logp->load();
     logger->show_result();
-}
-
-// [datatype]
-// 0: local_abort_counts
-// 1: local_commit_counts
-// 2: local_abort_by_validation1
-// 3: local_abort_by_validation2
-// 4: local_abort_by_validation3
-// 5: local_abort_by_null_buffer
-uint64_t ecall_getResult(int thid, int datatype) {
-    switch (datatype) {
-    case 0: // local_abort_counts
-        return results[thid].local_abort_counts_;
-    case 1: // local_commit_counts
-        return results[thid].local_commit_counts_;
-#if ADD_ANALYSIS
-    case 2: // local_abort_by_validation1
-        return results[thid].local_abort_by_validation1_;
-    case 3: // local_abort_by_validation2
-        return results[thid].local_abort_by_validation2_;
-    case 4: // local_abort_by_validation3
-        return results[thid].local_abort_by_validation3_;
-    case 5: // local_abort_by_null_buffer
-        return results[thid].local_abort_by_null_buffer_;
-#endif
-    default:
-        printf("ERR! @ecall_getResult\n");
-        return 0;
-    }
 }
 
 uint64_t ecall_showDurableEpoch() {

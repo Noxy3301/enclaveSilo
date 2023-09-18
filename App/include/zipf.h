@@ -11,6 +11,9 @@
 
 #include "random.h"
 
+using std::cout;
+using std::endl;
+
 // Fast zipf distribution by Jim Gray et al.
 class FastZipf {
     Xoroshiro128Plus *rnd_;
