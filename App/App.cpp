@@ -53,12 +53,12 @@
 #include <fcntl.h>
 #include <fstream> //filestream
 
-#include "include/random.h"
-#include "include/zipf.h"
+#include "utility/app_util.h"
+#include "logger_affinity/logger_affinity.h"
 #include "../Include/consts.h"
+#include "../Include/result.h"
 
 using namespace std;
-
 
 /* Global EID shared by multiple threads */
 sgx_enclave_id_t global_eid = 0;
@@ -131,165 +131,12 @@ void ocall_print_string(const char *str) {
     printf("%s", str);
 }
 
-// MARK: class(LoggerAffinity)
-
-class LoggerNode {
-    public:
-        int logger_cpu_;
-        std::vector<int> worker_cpu_;
-
-        LoggerNode() {}
-};
-
-class LoggerAffinity {
-    public:
-        std::vector<LoggerNode> nodes_;
-        unsigned worker_num_ = 0;
-        unsigned logger_num_ = 0;
-        void init(unsigned worker_num, unsigned logger_num);
-};
-
-void LoggerAffinity::init(unsigned worker_num, unsigned logger_num) {
-    unsigned num_cpus = std::thread::hardware_concurrency();
-    if (logger_num > num_cpus || worker_num > num_cpus) {
-        std::cout << "too many threads" << std::endl;
-    }
-    // LoggerAffinityのworker_numとlogger_numにコピー
-    worker_num_ = worker_num;
-    logger_num_ = logger_num;
-    for (unsigned i = 0; i < logger_num; i++) {
-        nodes_.emplace_back();
-    }
-    unsigned thread_num = logger_num + worker_num;
-    if (thread_num > num_cpus) {
-        for (unsigned i = 0; i < worker_num; i++) {
-            nodes_[i * logger_num/worker_num].worker_cpu_.emplace_back(i);
-        }
-        for (unsigned i = 0; i < logger_num; i++) {
-            nodes_[i].logger_cpu_ = nodes_[i].worker_cpu_.back();
-        }
-    } else {
-        for (unsigned i = 0; i < thread_num; i++) {
-            nodes_[i * logger_num/thread_num].worker_cpu_.emplace_back(i);
-        }
-        for (unsigned i = 0; i < logger_num; i++) {
-            nodes_[i].logger_cpu_ = nodes_[i].worker_cpu_.back();
-            nodes_[i].worker_cpu_.pop_back();
-        }
-    }
-}
-
-// MARK: siloResult
-
-class Result {
-    public:
-        uint64_t local_abort_counts_ = 0;
-        uint64_t local_commit_counts_ = 0;
-        uint64_t total_abort_counts_ = 0;
-        uint64_t total_commit_counts_ = 0;
-
-        uint64_t local_abort_res_counts_[4] = {0};
-};
-
-std::vector<Result> SiloResult(THREAD_NUM);
-
-// MARK: thread function
-
 void worker_th(int thid, int gid) {
-    returnResult ret;
-    ecall_worker_th(global_eid, thid, gid);  // thread.emplace_backで直接渡せる気がしないし、こっちで受け取ってResultの下処理をしたい
-    ecall_getAbortResult(global_eid, &ret.local_abort_counts_, thid);
-    ecall_getCommitResult(global_eid, &ret.local_commit_counts_, thid);
-
-    SiloResult[thid].local_commit_counts_ = ret.local_commit_counts_ ;
-    SiloResult[thid].local_abort_counts_ = ret.local_abort_counts_;
-
-    // Abortの原因を確認する用
-    for (int i = 0; i < 4; i++) {
-        uint64_t retValue = 0;
-        ecall_getAbortResResult(global_eid, &retValue, thid, i);
-        SiloResult[thid].local_abort_res_counts_[i] = retValue;
-    }
+    ecall_worker_th(global_eid, thid, gid);
 }
 
 void logger_th(int thid) {
     ecall_logger_th(global_eid, thid);
-}
-
-// MARK: utilities
-
-void waitForReady(const std::vector<int> &readys) {
-    while (true) {
-        bool failed = false;
-        for (const auto &ready : readys) {
-            if (!__atomic_load_n(&ready, __ATOMIC_ACQUIRE)) {
-                failed = true;
-                break;
-            }
-        }
-        if (!failed) break;
-    }
-}
-
-// Xoroshiro128Plus rnd;
-// FastZipf zipf(&rnd, ZIPF_SKEW, TUPLE_NUM);  //関数内で宣言すると割り算処理繰り返すからクソ重いぞ！
-
-void displayParameter() {
-    cout << "#clocks_per_us:\t" << CLOCKS_PER_US << endl;
-    cout << "#epoch_time:\t" << EPOCH_TIME << endl;
-    cout << "#extime:\t" << EXTIME << endl;
-    cout << "#max_ope:\t" << MAX_OPE << endl;
-    // cout << "#rmw:\t\t" << RMW << endl;
-    cout << "#rratio:\t" << RRAITO << endl;
-    cout << "#thread_num:\t" << THREAD_NUM << endl;
-    cout << "#tuple_num:\t" << TUPLE_NUM << endl;
-    cout << "#ycsb:\t\t" << YCSB << endl;
-    cout << "#zipf_skew:\t" << ZIPF_SKEW << endl;
-    cout << "#logger_num:\t" << LOGGER_NUM << endl;
-    cout << "#buffer_num:\t" << BUFFER_NUM << endl;
-    cout << "#buffer_size:\t" << BUFFER_SIZE << endl;
-}
-
-
-uint64_t total_commit_counts_ = 0;
-uint64_t total_abort_counts_ = 0;
-uint64_t tocal_abort_res_counts_[4] = {0};
-
-void displayResult() {
-    for (int i = 0; i < THREAD_NUM; i++) {
-#if SHOW_DETAILS
-        cout << 
-        "thread#" << i << 
-        "\tcommit: " << SiloResult[i].local_commit_counts_ << 
-        "\tabort:" << SiloResult[i].local_abort_counts_ << 
-        "\tabort_VP1: " << SiloResult[i].local_abort_res_counts_[0] <<  // aborted by validation phase 1
-        "\tabort_VP2: " << SiloResult[i].local_abort_res_counts_[1] <<  // aborted by validation phase 2
-        "\tabort_VP3: " << SiloResult[i].local_abort_res_counts_[2] <<  // aborted by validation phase 3
-        "\tabort_bNULL: " << SiloResult[i].local_abort_res_counts_[3] <<// aborted by NULL current buffer    
-        endl;
-#endif
-        total_commit_counts_ += SiloResult[i].local_commit_counts_;
-        total_abort_counts_ += SiloResult[i].local_abort_counts_;
-        tocal_abort_res_counts_[0] += SiloResult[i].local_abort_res_counts_[0];
-        tocal_abort_res_counts_[1] += SiloResult[i].local_abort_res_counts_[1];
-        tocal_abort_res_counts_[2] += SiloResult[i].local_abort_res_counts_[2];
-        tocal_abort_res_counts_[3] += SiloResult[i].local_abort_res_counts_[3];
-
-    }
-#if SHOW_DETAILS
-    cout << "[info]\tcommit_counts_:\t" << total_commit_counts_ << endl;
-    cout << "[info]\tabort_counts_:\t" << total_abort_counts_ << endl;
-    cout << "[info]\t-abort_validation1:\t" << tocal_abort_res_counts_[0] << endl;
-    cout << "[info]\t-abort_validation2:\t" << tocal_abort_res_counts_[1] << endl;
-    cout << "[info]\t-abort_validation3:\t" << tocal_abort_res_counts_[2] << endl;
-    cout << "[info]\t-abort_NULLbuffer:\t" << tocal_abort_res_counts_[3] << endl;
-
-    cout << "[info]\tabort_rate:\t" << (double)total_abort_counts_ / (double)(total_commit_counts_ + total_abort_counts_) << endl;
-
-    uint64_t result = total_commit_counts_ / EXTIME;
-    cout << "[info]\tlatency[ns]:\t" << powl(10.0, 9.0) / result * THREAD_NUM << endl;
-    cout << "[info]\tthroughput[tps]:\t" << result << endl;
-#endif
 }
 
 void create_logfiles(int logger_num) {
@@ -362,14 +209,16 @@ int ocall_save_pepochfile(const uint8_t* sealed_data, const size_t sealed_size) 
 
 /* Application entry */
 int SGX_CDECL main() {
+    DisplayResults results; // 結果を保持・表示するオブジェクト
+    LoggerAffinity affin;   // ロガーとワーカースレッドのアフィニティを管理するオブジェクト
+    std::vector<std::thread> logger_threads;    // ロガースレッドを保持するベクター
+    std::vector<std::thread> worker_threads;    // ワーカースレッドを保持するベクター
 
-    chrono::system_clock::time_point p1, p2, p3, p4, p5, p6;
 #if SHOW_DETAILS
-    std::cout << "esilo: Silo_logging running within Enclave" << std::endl;
-    std::cout << "ported from silo_minimum" << std::endl;
-    displayParameter();
+    results.displayParameter();
 #endif
-    p1 = chrono::system_clock::now();
+    // DB作成開始のタイムスタンプを追加する
+    results.addTimestamp();
 
     /* Initialize the enclave */
     if(initialize_enclave() < 0) {
@@ -377,79 +226,55 @@ int SGX_CDECL main() {
         getchar();
         return -1; 
     }
-
-    p2 = chrono::system_clock::now();
-
+    // DBを初期化する
     ecall_initDB(global_eid);
-    LoggerAffinity affin;
-    affin.init(THREAD_NUM, LOGGER_NUM); // logger/worker実行threadの決定
-
-    std::vector<std::thread> lthv;
-    std::vector<std::thread> wthv;
-
+    
+    // ログファイルの作成
     create_logfiles(LOGGER_NUM);
 
-    p3 = chrono::system_clock::now();
+    // スレッドのアフィニティオブジェクトを初期化する
+    affin.init(WORKER_NUM, LOGGER_NUM);
 
+    // スレッド作成開始のタイムスタンプを追加する
+    results.addTimestamp();
+
+    // CPUアフィニティに基づいてロガーとワーカースレッドを作成する
     int i = 0, j = 0;
     for (auto itr = affin.nodes_.begin(); itr != affin.nodes_.end(); itr++, j++) {
-        lthv.emplace_back(logger_th, j);    // TODO: add some arguments
+        logger_threads.emplace_back(logger_th, j);    // TODO: add some arguments
         for (auto wcpu = itr->worker_cpu_.begin(); wcpu != itr->worker_cpu_.end(); wcpu++, i++) {
-            wthv.emplace_back(worker_th, i, j);  // TODO: add some arguments
+            worker_threads.emplace_back(worker_th, i, j);  // TODO: add some arguments
         }
     }
-    
+
+    // すべてのスレッドが準備完了するのを待つ
     ecall_waitForReady(global_eid);
-    p4 = chrono::system_clock::now();
+
+    // スレッドの実行開始のタイムスタンプを追加する
+    results.addTimestamp();
+
+    // スレッドの実行を開始し、所定の時間待つ
     ecall_sendStart(global_eid);
     std::this_thread::sleep_for(std::chrono::milliseconds(1000 * EXTIME));
     ecall_sendQuit(global_eid);
 
-    p5 = chrono::system_clock::now();
+    // スレッドの破壊開始のタイムスタンプを追加する
+    results.addTimestamp();
 
-    for (auto &th : lthv) th.join();
-    for (auto &th : wthv) th.join();
+    // すべてのロガーとワーカースレッドが完了するのを待つ
+    for (auto &th : logger_threads) th.join();
+    for (auto &th : worker_threads) th.join();
 
-    p6 = chrono::system_clock::now();
+    // スレッドの破壊終了のタイムスタンプを追加する
+    results.addTimestamp();
+    
+    // ワーカーとロガースレッドからの結果を収集し、表示する
+    results.getWorkerResult();
+    results.getLoggerResult();
+    results.displayResult();
 
-    for (int i = 0; i < LOGGER_NUM; i++) {
-        ecall_showLoggerResult(global_eid, i);
-    }
-
-    double duration1 = static_cast<double>(chrono::duration_cast<chrono::microseconds>(p2 - p1).count() / 1000.0);
-    double duration2 = static_cast<double>(chrono::duration_cast<chrono::microseconds>(p3 - p2).count() / 1000.0);
-    double duration3 = static_cast<double>(chrono::duration_cast<chrono::microseconds>(p4 - p3).count() / 1000.0);
-    double duration4 = static_cast<double>(chrono::duration_cast<chrono::microseconds>(p5 - p4).count() / 1000.0);
-    double duration5 = static_cast<double>(chrono::duration_cast<chrono::microseconds>(p6 - p5).count() / 1000.0);
-
-    uint64_t ret_durableEpoch = 0;
-    ecall_showDurableEpoch(global_eid, &ret_durableEpoch);
-    displayResult();
-#if SHOW_DETAILS
-    std::cout << "[info]\tcreateEnclave:\t" << duration1/1000 << "s.\n";
-    std::cout << "[info]\tmakeDB:\t\t" << duration2/1000 << "s.\n";
-    std::cout << "[info]\tcreateThread:\t" << duration3/1000 << "s.\n";
-    std::cout << "[info]\texecutionTime:\t" << duration4/1000 << "s.\n";
-    std::cout << "[info]\tdestroyThread:\t" << duration5/1000 << "s.\n";
-    std::cout << "[info]\tocall_count(write):\t" << ocall_count.load() << std::endl;
-    std::cout << "[info]\tdurableEpoch:\t" << ret_durableEpoch << std::endl;
-#endif
-    std::cout << "=== for copy&paste ===" << std::endl;
-    std::cout << total_commit_counts_ << std::endl;
-    std::cout << total_abort_counts_ << std::endl;
-    std::cout << (double)total_abort_counts_ / (double)(total_commit_counts_ + total_abort_counts_) << std::endl;
-    uint64_t result = total_commit_counts_ / EXTIME;
-    std::cout << powl(10.0, 9.0) / result * THREAD_NUM << std::endl;;  // latency
-    std::cout << ret_durableEpoch << std::endl;
-    std::cout << result << std::endl;; // throughput
-
-    /* Destroy the enclave */
     sgx_destroy_enclave(global_eid);
-#if SHOW_DETAILS
-    printf("[info]\tSampleEnclave successfully returned.\n");
-    printf("[info]\tEnter a character before exit ...\n");
-    getchar();
-#endif
+
     return 0;
 }
 

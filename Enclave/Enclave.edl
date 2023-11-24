@@ -43,19 +43,19 @@ enclave {
         int ocall_save_logfile(int thid, [in, size=sealed_size]const uint8_t* sealed_data, size_t sealed_size);
         int ocall_save_pepochfile([in, size=sealed_size]const uint8_t* sealed_data, size_t sealed_size);
     };
-    
+
     trusted {
         public void ecall_initDB();
-        public void ecall_worker_th(int thid, int gid);
-        public void ecall_logger_th(int thid);
         public void ecall_waitForReady();
         public void ecall_sendStart();
         public void ecall_sendQuit();
-        public uint64_t ecall_getAbortResult(int thid);
-        public uint64_t ecall_getCommitResult(int thid);
-        public uint64_t ecall_getAbortResResult(int thid, int res);
-        public void ecall_showLoggerResult(int thid);
+        public void ecall_worker_th(int thid, int gid);
+        public void ecall_logger_th(int thid);
+        public uint64_t ecall_getAbortCount(int thid);
+        public uint64_t ecall_getCommitCount(int thid);
+        public uint64_t ecall_getSpecificAbortCount(int thid, int reason);
+        public uint64_t ecall_getLoggerCount(int thid, int type);
         public uint64_t ecall_showDurableEpoch();
+        public uint64_t ecall_get_analysis(int thid, int type);
     };
-
 };

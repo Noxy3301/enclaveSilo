@@ -1,44 +1,63 @@
+/**
+ * This file contains macro definitions configuring various aspects of 
+ * the database system program, including thread, data, execution, 
+ * time, buffer, data size, display, optimization, and more.
+ *
+ * These macro definitions and data structures are shared between
+ * App and Enclave, ensuring consistent data and mutual understanding,
+ * thereby improving the readability and simplification of the 
+ * overall system.
+ */
+
 #pragma once
 
-#define THREAD_NUM 9
-#define LOGGER_NUM 3
-#define TUPLE_NUM 1000000
-//#define TUPLE_NUM 100
-#define EXTIME 3
-#define CACHE_LINE_SIZE 64
+#include "consts_benchmark.h"
+#include "structures.h"
 
-#define MAX_OPE 10
-#define RRAITO 50
-#define YCSB false
-#define ZIPF_SKEW 0
+// -------------------
+// Thread configurations
+// -------------------
+// The number of worker threads.
+#define WORKER_NUM 16
+// The number of logger threads.
+#define LOGGER_NUM 4
 
+// -------------------
+// Time configurations
+// -------------------
+// The epoch duration in milliseconds.
 #define EPOCH_TIME 40
-#define CLOCKS_PER_US 2900
+// Clocks per microsecond for the target hardware.
+#define CLOCKS_PER_US 2700
 
-#define BUFFER_NUM 2
-#define BUFFER_SIZE 512
-#define EPOCH_DIFF 0
+// -------------------
+// Buffer configurations
+// -------------------
+// The number of buffers.
+#define BUFFER_NUM 1024
+// The maximum number of log entries that can be buffered before triggering a publish.
+#define MAX_BUFFERED_LOG_ENTRIES 1000
+// The epoch difference.
+#define EPOCH_DIFF 1
 
+// -------------------
+// Data size configurations
+// -------------------
+// The size of the value in bytes.
 #define VAL_SIZE 4
+// The size of a page in bytes.
 #define PAGE_SIZE 4096
+// The size of a log set.
 #define LOGSET_SIZE 1000
 
-// show result details flag
-#define SHOW_DETAILS 0
+// -------------------
+// Display configurations
+// -------------------
+// Flag to determine if detailed results should be shown. 0 for no, 1 for yes.
+#define SHOW_DETAILS 1
 
-// no wait optimization
+// -------------------
+// Optimization configurations
+// -------------------
+// Flag for "no-wait" optimization during validation. 1 to enable, 0 to disable.
 #define NO_WAIT_LOCKING_IN_VALIDATION 1
-
-// Index pattern
-// 0: ideal  - Key can be used as an array index. Thus, O(1) [Default]
-// 1: linear - No index, need to linear scan to search item.
-// 2: OCH    - Using Optimistic Cuckoo Hashing as index. wip
-#define INDEX_PATTERN 2
-
-#include <stdint.h>
-
-struct returnResult {
-    uint64_t local_abort_counts_ = 0;
-    uint64_t local_commit_counts_ = 0;
-    uint64_t local_abort_res_counts_[4] = {0};
-};
