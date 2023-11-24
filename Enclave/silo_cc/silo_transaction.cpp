@@ -91,7 +91,9 @@ Status TxExecutor::read(uint64_t &uint64t_key) {
 #endif
     // Place variables before the first goto instruction to avoid "crosses initialization of ..." error under -fpermissive.
 #if INDEX_PATTERN == INDEX_USE_MASSTREE
-    key_.set({uint64t_key}, 8); // MEMO:まあ最適化っていうことでこれでいいか
+    // key_.set({uint64t_key}, 8); // MEMO:まあ最適化っていうことでこれでいいか
+    key_.slices[0] = uint64t_key;
+    key_.lastSliceSize = 8;
 #endif
     Value *found_value; // TODO: found_valueを返すべきか？
 
@@ -221,7 +223,9 @@ Status TxExecutor::write(uint64_t &uint64t_key, uint64_t &uint64t_value) {
     uint64_t end_temp = 0;
         
 #if INDEX_PATTERN == INDEX_USE_MASSTREE
-    key_.set({uint64t_key}, 8);
+    // key_.set({uint64t_key}, 8); // MEMO:まあ最適化っていうことでこれでいいか
+    key_.slices[0] = uint64t_key;
+    key_.lastSliceSize = 8;
 #endif
 
     Value *found_value;
